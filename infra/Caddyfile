@@ -1,0 +1,17 @@
+api.{$DOMAIN} {
+    reverse_proxy atendefy-api:8080
+}
+
+app.{$DOMAIN} {
+    root * /srv/web
+    file_server
+    try_files {path} /index.html
+}
+
+evolution.{$DOMAIN} {
+    reverse_proxy evolution-api:8080
+}
+
+monitor.{$DOMAIN} {
+    reverse_proxy uptime-kuma:3001
+}
