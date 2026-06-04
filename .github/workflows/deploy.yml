@@ -42,10 +42,12 @@ jobs:
           file: src/Atendefy.API/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
 
   deploy:
     needs: build-push
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
@@ -54,7 +56,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            cd /opt/atendefy
+            cd /opt/atendefy || exit 1
             export API_VERSION=${{ github.ref_name }}
             docker compose pull atendefy-api
             docker compose up -d atendefy-api
