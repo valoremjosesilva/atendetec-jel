@@ -2,6 +2,7 @@ bin/
 obj/
 *.user
 .env
+src/Atendefy.API/appsettings.Development.json
 logs/
 *.log
 .vs/

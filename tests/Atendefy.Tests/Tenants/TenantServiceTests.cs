@@ -14,12 +14,15 @@ public class TenantServiceTests
         new(new DbContextOptionsBuilder<PublicDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
 
+    private static TenantService CreateService(PublicDbContext db, ITenantProvisioner provisioner) =>
+        new(db, provisioner, Microsoft.Extensions.Logging.Abstractions.NullLogger<TenantService>.Instance);
+
     [Fact]
     public async Task Register_WithValidData_ShouldCreateTenantAndOwner()
     {
         var db = CreateDb();
         var provisioner = Substitute.For<ITenantProvisioner>();
-        var sut = new TenantService(db, provisioner);
+        var sut = CreateService(db, provisioner);
 
         var result = await sut.RegisterAsync(new RegisterTenantRequest(
             CompanyName: "Clínica ABC",
@@ -46,7 +49,7 @@ public class TenantServiceTests
         await db.SaveChangesAsync();
 
         var provisioner = Substitute.For<ITenantProvisioner>();
-        var result = await new TenantService(db, provisioner)
+        var result = await CreateService(db, provisioner)
             .RegisterAsync(new RegisterTenantRequest("Other", "existing", "User", "u@t.com", "P@ss1"));
 
         result.IsSuccess.Should().BeFalse();
@@ -58,10 +61,10 @@ public class TenantServiceTests
     {
         var db = CreateDb();
         var provisioner = Substitute.For<ITenantProvisioner>();
-        var sut = new TenantService(db, provisioner);
+        var sut = CreateService(db, provisioner);
 
         await sut.RegisterAsync(new RegisterTenantRequest(
-            "Test", "MiNhAEmPrEsA", "User", "u@t.com", "P@ss1"));
+            "Test", "minhaempresa", "User", "u@t.com", "P@ss1"));
 
         var tenant = await db.Tenants.FirstAsync();
         tenant.Subdomain.Should().Be("minhaempresa");
@@ -75,7 +78,7 @@ public class TenantServiceTests
         await db.SaveChangesAsync();
 
         var provisioner = Substitute.For<ITenantProvisioner>();
-        await new TenantService(db, provisioner)
+        await CreateService(db, provisioner)
             .RegisterAsync(new RegisterTenantRequest("Other", "existing", "User", "u@t.com", "P@ss1"));
 
         await provisioner.DidNotReceive().ProvisionSchemaAsync(Arg.Any<string>());
@@ -89,7 +92,7 @@ public class TenantServiceTests
         provisioner.ProvisionSchemaAsync(Arg.Any<string>())
             .ThrowsAsync(new Exception("Postgres DDL error"));
 
-        var result = await new TenantService(db, provisioner)
+        var result = await CreateService(db, provisioner)
             .RegisterAsync(new RegisterTenantRequest(
                 "Test Co", "testco", "Owner", "owner@test.com", "P@ss123"));
 
@@ -106,7 +109,7 @@ public class TenantServiceTests
         var provisioner = Substitute.For<ITenantProvisioner>();
         var longPassword = new string('a', 73);
 
-        var result = await new TenantService(db, provisioner)
+        var result = await CreateService(db, provisioner)
             .RegisterAsync(new RegisterTenantRequest(
                 "Test", "test-long", "User", "u@t.com", longPassword));
 
@@ -120,12 +123,27 @@ public class TenantServiceTests
         var db = CreateDb();
         var provisioner = Substitute.For<ITenantProvisioner>();
 
-        var result = await new TenantService(db, provisioner)
+        var result = await CreateService(db, provisioner)
             .RegisterAsync(new RegisterTenantRequest(
                 "Test", "", "User", "u@t.com", "P@ss1"));
 
         result.IsSuccess.Should().BeFalse();
         result.Error.Should().Be("Todos os campos são obrigatórios");
+        await provisioner.DidNotReceive().ProvisionSchemaAsync(Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task Register_WithInvalidSubdomain_ShouldReturnFail()
+    {
+        var db = CreateDb();
+        var provisioner = Substitute.For<ITenantProvisioner>();
+
+        var result = await CreateService(db, provisioner)
+            .RegisterAsync(new RegisterTenantRequest(
+                "Test", "invalid subdomain!", "User", "u@t.com", "P@ss1"));
+
+        result.IsSuccess.Should().BeFalse();
+        result.Error.Should().Contain("Subdomínio inválido");
         await provisioner.DidNotReceive().ProvisionSchemaAsync(Arg.Any<string>());
     }
 }

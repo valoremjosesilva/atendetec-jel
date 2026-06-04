@@ -2,10 +2,11 @@ using Atendefy.API.Infrastructure.Database;
 using Atendefy.API.Modules.Tenants.Models;
 using Atendefy.API.SharedKernel;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Atendefy.API.Modules.Tenants;
 
-public class TenantService(PublicDbContext db, ITenantProvisioner provisioner)
+public class TenantService(PublicDbContext db, ITenantProvisioner provisioner, ILogger<TenantService> logger)
 {
     public async Task<Result<Tenant>> RegisterAsync(RegisterTenantRequest request)
     {
@@ -20,6 +21,9 @@ public class TenantService(PublicDbContext db, ITenantProvisioner provisioner)
             return Result<Tenant>.Fail("Senha inválida");
 
         var subdomain = request.Subdomain.ToLowerInvariant().Trim();
+
+        if (!System.Text.RegularExpressions.Regex.IsMatch(subdomain, @"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"))
+            return Result<Tenant>.Fail("Subdomínio inválido. Use apenas letras minúsculas, números e hífens (ex: minha-empresa)");
 
         if (await db.Tenants.AnyAsync(t => t.Subdomain == subdomain))
             return Result<Tenant>.Fail($"O subdomínio '{subdomain}' já está em uso");
@@ -50,8 +54,9 @@ public class TenantService(PublicDbContext db, ITenantProvisioner provisioner)
         {
             await provisioner.ProvisionSchemaAsync(tenant.SchemaName);
         }
-        catch
+        catch (Exception ex)
         {
+            logger.LogError(ex, "Schema provisioning failed for tenant {TenantId}, rolling back registration", tenant.Id);
             db.TenantUsers.Remove(owner);
             db.Tenants.Remove(tenant);
             await db.SaveChangesAsync();

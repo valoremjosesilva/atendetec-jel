@@ -54,6 +54,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 builder.Services.AddAuthorization();
+builder.Services.AddProblemDetails();
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
@@ -70,6 +71,8 @@ builder.Services.AddCors(opt => opt.AddDefaultPolicy(p => p
 
 var app = builder.Build();
 
+app.UseExceptionHandler();
+app.UseStatusCodePages();
 app.UseSerilogRequestLogging();
 app.UseCors();
 
