@@ -7,7 +7,7 @@ public static class TenantEndpoints
 {
     public static IEndpointRouteBuilder MapTenantEndpoints(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/tenants").WithTags("Tenants");
+        var group = app.MapGroup("/tenants").WithTags("Tenants").AllowAnonymous();
 
         group.MapPost("/register", async (
             [FromBody] RegisterTenantRequest request,

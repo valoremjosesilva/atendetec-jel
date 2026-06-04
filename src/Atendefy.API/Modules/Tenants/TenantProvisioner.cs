@@ -9,6 +9,7 @@ public class TenantProvisioner(string connectionString) : ITenantProvisioner
         // schemaName comes from Tenant.SchemaName = $"tenant_{Id:N}" — derived from GUID, never from user input
         await using var conn = new NpgsqlConnection(connectionString);
         await conn.OpenAsync();
+        await using var transaction = await conn.BeginTransactionAsync();
 
         var sql = $"""
             CREATE SCHEMA IF NOT EXISTS "{schemaName}";
@@ -59,7 +60,8 @@ public class TenantProvisioner(string connectionString) : ITenantProvisioner
             );
             """;
 
-        await using var cmd = new NpgsqlCommand(sql, conn);
+        await using var cmd = new NpgsqlCommand(sql, conn, transaction);
         await cmd.ExecuteNonQueryAsync();
+        await transaction.CommitAsync();
     }
 }

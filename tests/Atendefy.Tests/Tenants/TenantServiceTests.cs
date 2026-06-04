@@ -4,6 +4,7 @@ using Atendefy.API.Modules.Tenants.Models;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 
 namespace Atendefy.Tests.Tenants;
 
@@ -64,5 +65,67 @@ public class TenantServiceTests
 
         var tenant = await db.Tenants.FirstAsync();
         tenant.Subdomain.Should().Be("minhaempresa");
+    }
+
+    [Fact]
+    public async Task Register_WithDuplicateSubdomain_ShouldNotCallProvisioner()
+    {
+        var db = CreateDb();
+        db.Tenants.Add(new Tenant { Name = "Existing", Subdomain = "existing" });
+        await db.SaveChangesAsync();
+
+        var provisioner = Substitute.For<ITenantProvisioner>();
+        await new TenantService(db, provisioner)
+            .RegisterAsync(new RegisterTenantRequest("Other", "existing", "User", "u@t.com", "P@ss1"));
+
+        await provisioner.DidNotReceive().ProvisionSchemaAsync(Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task Register_WhenProvisionerThrows_ShouldReturnFailAndRemoveTenant()
+    {
+        var db = CreateDb();
+        var provisioner = Substitute.For<ITenantProvisioner>();
+        provisioner.ProvisionSchemaAsync(Arg.Any<string>())
+            .ThrowsAsync(new Exception("Postgres DDL error"));
+
+        var result = await new TenantService(db, provisioner)
+            .RegisterAsync(new RegisterTenantRequest(
+                "Test Co", "testco", "Owner", "owner@test.com", "P@ss123"));
+
+        result.IsSuccess.Should().BeFalse();
+        result.Error.Should().Contain("provisionar");
+        var tenant = await db.Tenants.IgnoreQueryFilters().FirstOrDefaultAsync(t => t.Subdomain == "testco");
+        tenant.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Register_WithPasswordOver72Chars_ShouldReturnFail()
+    {
+        var db = CreateDb();
+        var provisioner = Substitute.For<ITenantProvisioner>();
+        var longPassword = new string('a', 73);
+
+        var result = await new TenantService(db, provisioner)
+            .RegisterAsync(new RegisterTenantRequest(
+                "Test", "test-long", "User", "u@t.com", longPassword));
+
+        result.IsSuccess.Should().BeFalse();
+        result.Error.Should().Be("Senha inválida");
+    }
+
+    [Fact]
+    public async Task Register_WithEmptyRequiredField_ShouldReturnFail()
+    {
+        var db = CreateDb();
+        var provisioner = Substitute.For<ITenantProvisioner>();
+
+        var result = await new TenantService(db, provisioner)
+            .RegisterAsync(new RegisterTenantRequest(
+                "Test", "", "User", "u@t.com", "P@ss1"));
+
+        result.IsSuccess.Should().BeFalse();
+        result.Error.Should().Be("Todos os campos são obrigatórios");
+        await provisioner.DidNotReceive().ProvisionSchemaAsync(Arg.Any<string>());
     }
 }
