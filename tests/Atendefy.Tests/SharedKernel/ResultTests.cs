@@ -20,6 +20,7 @@ public class ResultTests
         var result = Result<string>.Fail("something went wrong");
         result.IsSuccess.Should().BeFalse();
         result.Error.Should().Be("something went wrong");
+        result.Value.Should().BeNull();
     }
 
     [Fact]
@@ -27,5 +28,13 @@ public class ResultTests
     {
         var result = Result.Ok();
         result.IsSuccess.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Fail_NonGeneric_ShouldReturnFailureResult()
+    {
+        var result = Result.Fail("base error");
+        result.IsSuccess.Should().BeFalse();
+        result.Error.Should().Be("base error");
     }
 }

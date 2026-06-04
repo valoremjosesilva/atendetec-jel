@@ -7,6 +7,9 @@ public static class AesEncryption
 {
     public static string Encrypt(string plainText, string key)
     {
+        ArgumentException.ThrowIfNullOrEmpty(plainText);
+        ArgumentException.ThrowIfNullOrEmpty(key);
+
         var keyBytes = SHA256.HashData(Encoding.UTF8.GetBytes(key));
         using var aes = Aes.Create();
         aes.Key = keyBytes;
@@ -22,15 +25,28 @@ public static class AesEncryption
 
     public static string Decrypt(string cipherText, string key)
     {
+        ArgumentException.ThrowIfNullOrEmpty(cipherText);
+        ArgumentException.ThrowIfNullOrEmpty(key);
+
+        byte[] fullBytes;
+        try
+        {
+            fullBytes = Convert.FromBase64String(cipherText);
+        }
+        catch (FormatException ex)
+        {
+            throw new ArgumentException("cipherText is not valid Base64.", nameof(cipherText), ex);
+        }
+
+        if (fullBytes.Length < 17)
+            throw new ArgumentException("cipherText is too short to contain a valid IV + payload.", nameof(cipherText));
+
         var keyBytes = SHA256.HashData(Encoding.UTF8.GetBytes(key));
-        var fullBytes = Convert.FromBase64String(cipherText);
         using var aes = Aes.Create();
         aes.Key = keyBytes;
-        var iv = fullBytes[..16];
-        var cipher = fullBytes[16..];
-        aes.IV = iv;
+        aes.IV = fullBytes[..16];
         using var decryptor = aes.CreateDecryptor();
-        var plainBytes = decryptor.TransformFinalBlock(cipher, 0, cipher.Length);
+        var plainBytes = decryptor.TransformFinalBlock(fullBytes, 16, fullBytes.Length - 16);
         return Encoding.UTF8.GetString(plainBytes);
     }
 }
