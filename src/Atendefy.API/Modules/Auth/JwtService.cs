@@ -16,7 +16,7 @@ public class JwtService(string secret, string issuer, string audience)
         {
             new Claim("sub", userId.ToString()),
             new Claim("tenant_id", tenantId.ToString()),
-            new Claim(ClaimTypes.Role, role),
+            new Claim("role", role),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
         };
 

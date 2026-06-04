@@ -43,4 +43,22 @@ public class JwtServiceTests
         var principal = _sut.ValidateToken("not.a.valid.token");
         principal.Should().BeNull();
     }
+
+    [Fact]
+    public void ValidateToken_WithExpiredToken_ShouldReturnNull()
+    {
+        var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler { MapInboundClaims = false };
+        var key = new Microsoft.IdentityModel.Tokens.SymmetricSecurityKey(
+            System.Text.Encoding.UTF8.GetBytes("test_secret_key_minimum_32_chars_!!!"));
+        var token = handler.WriteToken(new System.IdentityModel.Tokens.Jwt.JwtSecurityToken(
+            issuer: "Atendefy",
+            audience: "atendefy.com.br",
+            expires: DateTime.UtcNow.AddMinutes(-1),
+            signingCredentials: new Microsoft.IdentityModel.Tokens.SigningCredentials(
+                key, Microsoft.IdentityModel.Tokens.SecurityAlgorithms.HmacSha256)));
+
+        var principal = _sut.ValidateToken(token);
+
+        principal.Should().BeNull();
+    }
 }

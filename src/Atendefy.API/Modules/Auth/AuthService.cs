@@ -10,8 +10,14 @@ public class AuthService(PublicDbContext db, JwtService jwtService)
     // tenantIdentifier = subdomínio (ex: "clinica-abc") resolvido pelo TenantResolver
     public async Task<Result<AuthResponse>> LoginAsync(LoginRequest request, string tenantIdentifier)
     {
+        if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
+            return Result<AuthResponse>.Fail("Email e senha são obrigatórios");
+        if (request.Password.Length > 72)
+            return Result<AuthResponse>.Fail("Senha inválida");
+
         var tenant = await db.Tenants
-            .FirstOrDefaultAsync(t => t.Subdomain == tenantIdentifier);
+            .FirstOrDefaultAsync(t => t.Subdomain == tenantIdentifier
+                                   && t.Status == "active");
 
         if (tenant is null)
             return Result<AuthResponse>.Fail("Tenant não encontrado");
