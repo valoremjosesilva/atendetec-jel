@@ -1,4 +1,5 @@
 using Atendefy.API.Modules.Tenants.Models;
+using Atendefy.API.Modules.Webhooks.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace Atendefy.API.Infrastructure.Database;
@@ -7,6 +8,7 @@ public class PublicDbContext(DbContextOptions<PublicDbContext> options) : DbCont
 {
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<TenantUser> TenantUsers => Set<TenantUser>();
+    public DbSet<WebhookRoute> WebhookRoutes => Set<WebhookRoute>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -33,6 +35,16 @@ public class PublicDbContext(DbContextOptions<PublicDbContext> options) : DbCont
             e.Property(x => x.Role).HasMaxLength(50);
             e.HasQueryFilter(x => !x.IsDeleted);
             e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<WebhookRoute>(e =>
+        {
+            e.ToTable("webhook_routes");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Provider).HasMaxLength(50).IsRequired();
+            e.Property(x => x.LookupKey).HasMaxLength(200).IsRequired();
+            e.HasIndex(x => x.LookupKey).IsUnique();
+            e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }
