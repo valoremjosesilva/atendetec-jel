@@ -17,12 +17,12 @@ public static class AuthEndpoints
             // TenantId é o subdomínio resolvido pelo TenantResolver middleware
             var tenantIdentifier = ctx.Items["TenantId"]?.ToString();
             if (string.IsNullOrEmpty(tenantIdentifier))
-                return Results.Unauthorized();
+                return Results.Json(new { error = "Tenant não identificado" }, statusCode: 401);
 
             var result = await authService.LoginAsync(request, tenantIdentifier);
             return result.IsSuccess
                 ? Results.Ok(result.Value)
-                : Results.Unauthorized();
+                : Results.Json(new { error = result.Error }, statusCode: 401);
         });
 
         return app;
