@@ -4,6 +4,8 @@ using Atendefy.API.Infrastructure.Messaging;
 using Atendefy.API.Infrastructure.RateLimiting;
 using Atendefy.API.Modules.AI;
 using Atendefy.API.Modules.Auth;
+using Atendefy.API.Modules.Billing;
+using Atendefy.API.Modules.Billing.Gateways;
 using Atendefy.API.Modules.Chatbot;
 using Atendefy.API.Modules.Tenants;
 using Atendefy.API.Modules.Webhooks;
@@ -31,6 +33,11 @@ var baseDomain    = builder.Configuration["App:BaseDomain"]!;
 var encryptionKey = builder.Configuration["Encryption:Key"]!;
 var metaAppSecret = builder.Configuration["Meta:AppSecret"] ?? string.Empty;
 var rateLimit     = builder.Configuration.GetValue<int>("RateLimit:MessagesPerMinute", 60);
+var asaasKey      = builder.Configuration["Asaas:ApiKey"] ?? string.Empty;
+var asaasWebhook  = builder.Configuration["Asaas:WebhookToken"] ?? string.Empty;
+var asaasSandbox  = builder.Configuration.GetValue<bool>("Asaas:Sandbox", true);
+var stripeKey     = builder.Configuration["Stripe:SecretKey"] ?? string.Empty;
+var stripeWebhook = builder.Configuration["Stripe:WebhookSecret"] ?? string.Empty;
 
 // Database
 builder.Services.AddDbContext<PublicDbContext>(opt => opt.UseNpgsql(connStr));
@@ -96,6 +103,16 @@ builder.Services.AddHostedService(sp => new ConversationWorker(
     encryptionKey,
     sp.GetRequiredService<ILogger<ConversationWorker>>()));
 
+// Billing
+builder.Services.AddHttpClient("billing");
+builder.Services.AddSingleton<IBillingGatewayFactory>(sp =>
+    new BillingGatewayFactory(
+        sp.GetRequiredService<IHttpClientFactory>(),
+        asaasKey, asaasWebhook, asaasSandbox,
+        stripeKey, stripeWebhook));
+builder.Services.AddScoped<BillingService>();
+builder.Services.AddHostedService<SuspensionWorker>();
+
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -142,6 +159,8 @@ app.MapTenantEndpoints();
 app.MapWhatsAppEndpoints();
 app.MapAIEndpoints();
 app.MapWebhookEndpoints();
+app.MapBillingEndpoints();
+app.MapBillingWebhookEndpoints();
 
 // Automatic migrations on startup
 using (var scope = app.Services.CreateScope())
