@@ -14,7 +14,7 @@ services:
       - atendefy
 
   atendefy-api:
-    image: ghcr.io/atendefy/api:${API_VERSION:-latest}
+    image: ${API_IMAGE:-ghcr.io/atendefy/api}:${API_VERSION:-latest}
     restart: unless-stopped
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
@@ -33,7 +33,7 @@ services:
       - atendefy
 
   atendefy-web:
-    image: ghcr.io/atendefy/web:${WEB_VERSION:-latest}
+    image: ${WEB_IMAGE:-ghcr.io/atendefy/web}:${WEB_VERSION:-latest}
     restart: unless-stopped
     depends_on:
       - atendefy-api

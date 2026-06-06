@@ -7,10 +7,11 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/api
+  API_IMAGE: ${{ github.repository }}/api
+  WEB_IMAGE: ${{ github.repository }}/web
 
 jobs:
-  build-push:
+  build-push-api:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -29,13 +30,13 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ env.API_IMAGE }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest
 
-      - name: Build and push
+      - name: Build and push API
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -44,8 +45,42 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 
+  build-push-web:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.WEB_IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - name: Build and push Web
+        uses: docker/build-push-action@v5
+        with:
+          context: src/Atendefy.Web
+          file: src/Atendefy.Web/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
   deploy:
-    needs: build-push
+    needs: [build-push-api, build-push-web]
     runs-on: ubuntu-latest
     permissions: {}
     steps:
@@ -58,6 +93,9 @@ jobs:
           script: |
             cd /opt/atendefy || exit 1
             export API_VERSION=${{ github.ref_name }}
-            docker compose pull atendefy-api
-            docker compose up -d atendefy-api
+            export WEB_VERSION=${{ github.ref_name }}
+            export API_IMAGE=ghcr.io/${{ github.repository }}/api
+            export WEB_IMAGE=ghcr.io/${{ github.repository }}/web
+            docker compose pull atendefy-api atendefy-web
+            docker compose up -d atendefy-api atendefy-web
             docker image prune -f
