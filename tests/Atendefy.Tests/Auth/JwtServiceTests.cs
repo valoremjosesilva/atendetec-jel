@@ -11,7 +11,7 @@ public class JwtServiceTests
     [Fact]
     public void GenerateAccessToken_ShouldReturnNonEmptyToken()
     {
-        var token = _sut.GenerateAccessToken(Guid.NewGuid(), Guid.NewGuid(), "Owner");
+        var token = _sut.GenerateAccessToken(Guid.NewGuid(), Guid.NewGuid(), "Owner", "test@test.com");
         token.Should().NotBeNullOrEmpty();
     }
 
@@ -28,7 +28,7 @@ public class JwtServiceTests
     {
         var userId = Guid.NewGuid();
         var tenantId = Guid.NewGuid();
-        var token = _sut.GenerateAccessToken(userId, tenantId, "Admin");
+        var token = _sut.GenerateAccessToken(userId, tenantId, "Admin", "admin@test.com");
 
         var principal = _sut.ValidateToken(token);
 
