@@ -18,3 +18,12 @@ services:
       - "8080:8080"
     volumes:
       - ../logs:/app/logs
+
+  atendefy-web:
+    build:
+      context: ../src/Atendefy.Web
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    depends_on:
+      - atendefy-api

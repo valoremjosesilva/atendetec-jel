@@ -32,6 +32,14 @@ services:
     networks:
       - atendefy
 
+  atendefy-web:
+    image: ghcr.io/atendefy/web:${WEB_VERSION:-latest}
+    restart: unless-stopped
+    depends_on:
+      - atendefy-api
+    networks:
+      - atendefy
+
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
