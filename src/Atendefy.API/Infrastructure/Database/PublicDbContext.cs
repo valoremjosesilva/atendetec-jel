@@ -56,8 +56,8 @@ public class PublicDbContext(DbContextOptions<PublicDbContext> options) : DbCont
             e.ToTable("plans");
             e.HasKey(x => x.Id);
             e.Property(x => x.Name).IsRequired().HasMaxLength(100);
-            e.Property(x => x.PriceMonthly).HasColumnType("decimal(10,2)");
-            e.Property(x => x.PriceYearly).HasColumnType("decimal(10,2)");
+            e.Property(x => x.PriceMonthly).HasColumnType("numeric(10,2)");
+            e.Property(x => x.PriceYearly).HasColumnType("numeric(10,2)");
             e.HasQueryFilter(x => !x.IsDeleted);
         });
 
@@ -70,7 +70,7 @@ public class PublicDbContext(DbContextOptions<PublicDbContext> options) : DbCont
             e.Property(x => x.Provider).HasMaxLength(50).IsRequired();
             e.Property(x => x.ExternalCustomerId).HasMaxLength(200);
             e.Property(x => x.ExternalId).HasMaxLength(200);
-            e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<Plan>().WithMany().HasForeignKey(x => x.PlanId).OnDelete(DeleteBehavior.Restrict);
             e.HasQueryFilter(x => !x.IsDeleted);
         });
@@ -79,11 +79,14 @@ public class PublicDbContext(DbContextOptions<PublicDbContext> options) : DbCont
         {
             e.ToTable("invoices");
             e.HasKey(x => x.Id);
-            e.Property(x => x.Amount).HasColumnType("decimal(10,2)");
+            e.Property(x => x.Amount).HasColumnType("numeric(10,2)");
             e.Property(x => x.Status).HasMaxLength(50).IsRequired();
             e.Property(x => x.Provider).HasMaxLength(50).IsRequired();
             e.Property(x => x.BillingType).HasMaxLength(50).IsRequired();
             e.Property(x => x.ExternalId).HasMaxLength(200);
+            e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
+            e.HasIndex(x => x.TenantId);
+            e.HasIndex(x => x.ExternalId);
             e.HasOne<Subscription>().WithMany().HasForeignKey(x => x.SubscriptionId).OnDelete(DeleteBehavior.Cascade);
             e.HasQueryFilter(x => !x.IsDeleted);
         });

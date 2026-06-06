@@ -12,7 +12,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Atendefy.API.Infrastructure.Database.Migrations
 {
     [DbContext(typeof(PublicDbContext))]
-    [Migration("20260606003411_AddBillingTables")]
+    [Migration("20260606004848_AddBillingTables")]
     partial class AddBillingTables
     {
         /// <inheritdoc />
@@ -33,7 +33,7 @@ namespace Atendefy.API.Infrastructure.Database.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(10,2)");
+                        .HasColumnType("numeric(10,2)");
 
                     b.Property<string>("BillingType")
                         .IsRequired()
@@ -92,7 +92,11 @@ namespace Atendefy.API.Infrastructure.Database.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ExternalId");
+
                     b.HasIndex("SubscriptionId");
+
+                    b.HasIndex("TenantId");
 
                     b.ToTable("invoices", "public");
                 });
@@ -125,10 +129,10 @@ namespace Atendefy.API.Infrastructure.Database.Migrations
                         .HasColumnType("character varying(100)");
 
                     b.Property<decimal>("PriceMonthly")
-                        .HasColumnType("decimal(10,2)");
+                        .HasColumnType("numeric(10,2)");
 
                     b.Property<decimal>("PriceYearly")
-                        .HasColumnType("decimal(10,2)");
+                        .HasColumnType("numeric(10,2)");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -342,6 +346,12 @@ namespace Atendefy.API.Infrastructure.Database.Migrations
                         .HasForeignKey("SubscriptionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("Atendefy.API.Modules.Tenants.Models.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Atendefy.API.Modules.Billing.Models.Subscription", b =>
@@ -355,7 +365,7 @@ namespace Atendefy.API.Infrastructure.Database.Migrations
                     b.HasOne("Atendefy.API.Modules.Tenants.Models.Tenant", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

@@ -68,7 +68,7 @@ namespace Atendefy.API.Infrastructure.Database.Migrations
                         principalSchema: "public",
                         principalTable: "tenants",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -105,13 +105,32 @@ namespace Atendefy.API.Infrastructure.Database.Migrations
                         principalTable: "subscriptions",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_invoices_tenants_TenantId",
+                        column: x => x.TenantId,
+                        principalSchema: "public",
+                        principalTable: "tenants",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Restrict);
                 });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_invoices_ExternalId",
+                schema: "public",
+                table: "invoices",
+                column: "ExternalId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_invoices_SubscriptionId",
                 schema: "public",
                 table: "invoices",
                 column: "SubscriptionId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_invoices_TenantId",
+                schema: "public",
+                table: "invoices",
+                column: "TenantId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_subscriptions_PlanId",
