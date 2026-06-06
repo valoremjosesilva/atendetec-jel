@@ -1,8 +1,13 @@
 using Atendefy.API.Infrastructure.Cache;
 using Atendefy.API.Infrastructure.Database;
 using Atendefy.API.Infrastructure.Messaging;
+using Atendefy.API.Infrastructure.RateLimiting;
+using Atendefy.API.Modules.AI;
 using Atendefy.API.Modules.Auth;
+using Atendefy.API.Modules.Chatbot;
 using Atendefy.API.Modules.Tenants;
+using Atendefy.API.Modules.Webhooks;
+using Atendefy.API.Modules.WhatsApp;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -17,20 +22,28 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseSerilog((ctx, services, config) =>
     config.ReadFrom.Configuration(ctx.Configuration).ReadFrom.Services(services));
 
-var connStr     = builder.Configuration.GetConnectionString("Postgres")!;
-var redisConn   = builder.Configuration.GetConnectionString("Redis")!;
-var jwtSecret   = builder.Configuration["Jwt:Secret"]!;
-var jwtIssuer   = builder.Configuration["Jwt:Issuer"]!;
-var jwtAudience = builder.Configuration["Jwt:Audience"]!;
-var baseDomain  = builder.Configuration["App:BaseDomain"]!;
+var connStr       = builder.Configuration.GetConnectionString("Postgres")!;
+var redisConn     = builder.Configuration.GetConnectionString("Redis")!;
+var jwtSecret     = builder.Configuration["Jwt:Secret"]!;
+var jwtIssuer     = builder.Configuration["Jwt:Issuer"]!;
+var jwtAudience   = builder.Configuration["Jwt:Audience"]!;
+var baseDomain    = builder.Configuration["App:BaseDomain"]!;
+var encryptionKey = builder.Configuration["Encryption:Key"]!;
+var metaAppSecret = builder.Configuration["Meta:AppSecret"] ?? string.Empty;
+var rateLimit     = builder.Configuration.GetValue<int>("RateLimit:MessagesPerMinute", 60);
 
 // Database
 builder.Services.AddDbContext<PublicDbContext>(opt => opt.UseNpgsql(connStr));
+builder.Services.AddSingleton(new TenantDbContextFactory(connStr));
 
 // Redis
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisConn));
 builder.Services.AddSingleton<RedisService>();
 builder.Services.AddSingleton<RedisStreamService>();
+
+// Rate Limiting
+builder.Services.AddSingleton(sp =>
+    new TenantRateLimiter(sp.GetRequiredService<RedisService>(), rateLimit));
 
 // Tenant
 builder.Services.AddSingleton(new TenantResolver(baseDomain));
@@ -55,6 +68,34 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 builder.Services.AddAuthorization();
 builder.Services.AddProblemDetails();
+
+// WhatsApp
+builder.Services.AddHttpClient("whatsapp");
+builder.Services.AddSingleton<WhatsAppProviderFactory>();
+builder.Services.AddScoped<WhatsAppAccountService>();
+
+// AI
+builder.Services.AddHttpClient("ai");
+builder.Services.AddSingleton<AIProviderFactory>();
+builder.Services.AddScoped(sp =>
+    new AiConfigService(sp.GetRequiredService<TenantDbContextFactory>(), encryptionKey));
+
+// Webhooks
+builder.Services.AddSingleton(new MetaWebhookValidator(metaAppSecret));
+builder.Services.AddScoped<EvolutionWebhookValidator>();
+
+// Chatbot
+builder.Services.AddSingleton<ConversationService>();
+builder.Services.AddHostedService(sp => new ConversationWorker(
+    sp.GetRequiredService<RedisStreamService>(),
+    sp.GetRequiredService<ConversationService>(),
+    sp.GetRequiredService<TenantDbContextFactory>(),
+    sp.GetRequiredService<PublicDbContext>(),
+    sp.GetRequiredService<AIProviderFactory>(),
+    sp.GetRequiredService<WhatsAppProviderFactory>(),
+    sp.GetRequiredService<TenantRateLimiter>(),
+    encryptionKey,
+    sp.GetRequiredService<ILogger<ConversationWorker>>()));
 
 // Swagger
 builder.Services.AddEndpointsApiExplorer();
@@ -82,8 +123,6 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// Resolve tenant and inject into context — BEFORE authentication so tenant context
-// is available to auth policies
 app.Use(async (ctx, next) =>
 {
     var resolver = ctx.RequestServices.GetRequiredService<TenantResolver>();
@@ -101,20 +140,16 @@ app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = Dat
 
 app.MapAuthEndpoints();
 app.MapTenantEndpoints();
+app.MapWhatsAppEndpoints();
+app.MapAIEndpoints();
+app.MapWebhookEndpoints();
 
 // Automatic migrations on startup
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<PublicDbContext>();
-    try
-    {
-        await db.Database.MigrateAsync();
-    }
-    catch (Exception ex)
-    {
-        Log.Fatal(ex, "Database migration failed");
-        throw;
-    }
+    try { await db.Database.MigrateAsync(); }
+    catch (Exception ex) { Log.Fatal(ex, "Database migration failed"); throw; }
 }
 
 app.Run();
