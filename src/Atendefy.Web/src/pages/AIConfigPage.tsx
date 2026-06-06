@@ -53,7 +53,12 @@ export default function AIConfigPage() {
     setError('');
     setSuccess(false);
     try {
-      await saveConfig.mutateAsync({ provider, apiKey, model, systemPrompt });
+      await saveConfig.mutateAsync({
+        provider,
+        ...(apiKey ? { apiKey } : {}),
+        model,
+        systemPrompt,
+      });
       setSuccess(true);
       setApiKey('');
     } catch (err: unknown) {

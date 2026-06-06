@@ -51,7 +51,7 @@ export interface AIConfigResponse {
 
 export interface AIConfigRequest {
   provider: string;
-  apiKey: string;
+  apiKey?: string;
   model: string;
   systemPrompt: string;
 }

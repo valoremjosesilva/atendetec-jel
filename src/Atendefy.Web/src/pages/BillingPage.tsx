@@ -59,6 +59,7 @@ export default function BillingPage() {
   const subscribe = useSubscribe();
   const cancelSub = useCancelSubscription();
 
+  const [cancelError, setCancelError] = useState('');
   const [cycle, setCycle] = useState<BillingCycle>('monthly');
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [provider, setProvider] = useState('asaas');
@@ -107,10 +108,11 @@ export default function BillingPage() {
 
   async function handleCancel() {
     if (!confirm('Cancelar assinatura? O acesso continua até o fim do período atual.')) return;
+    setCancelError('');
     try {
       await cancelSub.mutateAsync();
     } catch {
-      // query will refresh; error shown implicitly
+      setCancelError('Erro ao cancelar assinatura. Tente novamente.');
     }
   }
 
@@ -159,6 +161,7 @@ export default function BillingPage() {
                 </Badge>
               </p>
             )}
+            {cancelError && <p className="text-sm text-destructive">{cancelError}</p>}
             {subscription.status !== 'cancelled' && (
               <Button
                 variant="destructive"
