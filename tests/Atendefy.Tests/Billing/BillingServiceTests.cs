@@ -166,4 +166,70 @@ public class BillingServiceTests
 
         result.IsSuccess.Should().BeFalse();
     }
+
+    [Fact]
+    public async Task CancelAsync_WithActiveSubscription_ShouldMarkCancelledAndCallGateway()
+    {
+        var db = CreateDb();
+        var tenant = new Tenant { Name = "Cancela Corp", Subdomain = "cancela-corp" };
+        var plan = new Plan { Name = "Starter", PriceMonthly = 99m, LimitsJson = "{}" };
+        db.Tenants.Add(tenant);
+        db.Plans.Add(plan);
+
+        var sub = new Subscription
+        {
+            TenantId = tenant.Id, PlanId = plan.Id,
+            Status = "active", Provider = "asaas", BillingCycle = "monthly",
+            ExternalId = "pay_to_cancel"
+        };
+        db.Subscriptions.Add(sub);
+        await db.SaveChangesAsync();
+
+        var gateway = Substitute.For<IBillingGateway>();
+        var gatewayFactory = Substitute.For<IBillingGatewayFactory>();
+        gatewayFactory.Create("asaas").Returns(gateway);
+
+        var svc = new BillingService(db, gatewayFactory);
+        var result = await svc.CancelAsync(tenant.Id);
+
+        result.IsSuccess.Should().BeTrue();
+        var updatedSub = await db.Subscriptions.FindAsync(sub.Id);
+        updatedSub!.Status.Should().Be("cancelled");
+        await gateway.Received(1).CancelChargeAsync("pay_to_cancel");
+    }
+
+    [Fact]
+    public async Task ProcessPaymentEventAsync_WhenCancelled_ShouldMarkInvoiceAndSubscriptionCancelled()
+    {
+        var db = CreateDb();
+        var tenant = new Tenant { Name = "Cancelled Corp", Subdomain = "cancelled-corp" };
+        var plan = new Plan { Name = "Starter", PriceMonthly = 99m, LimitsJson = "{}" };
+        db.Tenants.Add(tenant);
+        db.Plans.Add(plan);
+
+        var sub = new Subscription
+        {
+            TenantId = tenant.Id, PlanId = plan.Id,
+            Status = "active", Provider = "stripe", BillingCycle = "monthly"
+        };
+        db.Subscriptions.Add(sub);
+
+        var invoice = new Invoice
+        {
+            SubscriptionId = sub.Id, TenantId = tenant.Id, Amount = 99m,
+            Status = "pending", Provider = "stripe", BillingType = "CREDIT_CARD",
+            ExternalId = "pi_cancelled", DueDate = DateTime.UtcNow.AddDays(1)
+        };
+        db.Invoices.Add(invoice);
+        await db.SaveChangesAsync();
+
+        var svc = new BillingService(db, Substitute.For<IBillingGatewayFactory>());
+        await svc.ProcessPaymentEventAsync(new WebhookEvent("pi_cancelled", false, false, IsCancelled: true));
+
+        var updatedInvoice = await db.Invoices.FindAsync(invoice.Id);
+        updatedInvoice!.Status.Should().Be("cancelled");
+
+        var updatedSub = await db.Subscriptions.FindAsync(sub.Id);
+        updatedSub!.Status.Should().Be("cancelled");
+    }
 }
