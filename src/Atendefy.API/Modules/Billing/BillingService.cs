@@ -1,0 +1,128 @@
+using Atendefy.API.Infrastructure.Database;
+using Atendefy.API.Modules.Billing.Gateways;
+using Atendefy.API.Modules.Billing.Models;
+using Atendefy.API.SharedKernel;
+using Microsoft.EntityFrameworkCore;
+
+namespace Atendefy.API.Modules.Billing;
+
+public class BillingService(PublicDbContext db, IBillingGatewayFactory gatewayFactory)
+{
+    private static readonly HashSet<string> ValidProviders = ["asaas", "stripe"];
+    private static readonly HashSet<string> ValidCycles = ["monthly", "yearly"];
+
+    public async Task<Result<Invoice>> SubscribeAsync(
+        Guid tenantId, string tenantName, string email, CreateSubscriptionRequest request)
+    {
+        if (!ValidProviders.Contains(request.Provider))
+            return Result<Invoice>.Fail("Provider inválido. Use 'asaas' ou 'stripe'.");
+        if (!ValidCycles.Contains(request.BillingCycle))
+            return Result<Invoice>.Fail("Ciclo inválido. Use 'monthly' ou 'yearly'.");
+
+        var plan = await db.Plans.FindAsync(request.PlanId);
+        if (plan is null) return Result<Invoice>.Fail("Plano não encontrado.");
+
+        var gateway = gatewayFactory.Create(request.Provider);
+        var customerId = await gateway.CreateCustomerAsync(tenantName, email, request.CpfCnpj ?? string.Empty);
+
+        var amount = request.BillingCycle == "yearly" ? plan.PriceYearly : plan.PriceMonthly;
+        var dueDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(3));
+        var description = $"{plan.Name} - {(request.BillingCycle == "yearly" ? "Anual" : "Mensal")}";
+
+        var charge = await gateway.CreateChargeAsync(new CreateChargeArgs(
+            customerId, amount, request.BillingType, description, dueDate, request.PaymentMethodId));
+
+        var now = DateTime.UtcNow;
+        var subscription = new Subscription
+        {
+            TenantId = tenantId,
+            PlanId = plan.Id,
+            Status = "pending",
+            BillingCycle = request.BillingCycle,
+            Provider = request.Provider,
+            ExternalCustomerId = customerId,
+            ExternalId = charge.ExternalId,
+            CurrentPeriodStart = now,
+            CurrentPeriodEnd = request.BillingCycle == "yearly" ? now.AddYears(1) : now.AddMonths(1)
+        };
+        db.Subscriptions.Add(subscription);
+        await db.SaveChangesAsync();
+
+        var invoice = new Invoice
+        {
+            SubscriptionId = subscription.Id,
+            TenantId = tenantId,
+            Amount = amount,
+            Status = "pending",
+            Provider = request.Provider,
+            BillingType = request.BillingType,
+            ExternalId = charge.ExternalId,
+            DueDate = dueDate.ToDateTime(TimeOnly.MinValue),
+            BoletoUrl = charge.BoletoUrl,
+            BoletoBarcode = charge.BoletoBarcode,
+            PixCopyPaste = charge.PixCopyPaste,
+            ClientSecret = charge.ClientSecret
+        };
+        db.Invoices.Add(invoice);
+        await db.SaveChangesAsync();
+
+        return Result<Invoice>.Ok(invoice);
+    }
+
+    public async Task ProcessPaymentEventAsync(WebhookEvent evt)
+    {
+        var invoice = await db.Invoices
+            .FirstOrDefaultAsync(i => i.ExternalId == evt.ExternalId);
+        if (invoice is null) return;
+
+        var subscription = await db.Subscriptions.FindAsync(invoice.SubscriptionId);
+        if (subscription is null) return;
+
+        if (evt.IsPaid)
+        {
+            invoice.Status = "paid";
+            invoice.PaidAt = DateTime.UtcNow;
+            subscription.Status = "active";
+
+            var tenant = await db.Tenants.FindAsync(subscription.TenantId);
+            if (tenant is not null)
+            {
+                tenant.PlanId = subscription.PlanId;
+                tenant.Status = "active";
+                tenant.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+        else if (evt.IsOverdue)
+        {
+            invoice.Status = "overdue";
+            subscription.Status = "past_due";
+        }
+        else if (evt.IsCancelled)
+        {
+            invoice.Status = "cancelled";
+            subscription.Status = "cancelled";
+        }
+
+        invoice.UpdatedAt = DateTime.UtcNow;
+        subscription.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+    }
+
+    public async Task<Result> CancelAsync(Guid tenantId)
+    {
+        var subscription = await db.Subscriptions
+            .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.Status != "cancelled");
+        if (subscription is null) return Result.Fail("Assinatura ativa não encontrada.");
+
+        if (!string.IsNullOrEmpty(subscription.ExternalId))
+        {
+            var gateway = gatewayFactory.Create(subscription.Provider);
+            await gateway.CancelChargeAsync(subscription.ExternalId);
+        }
+
+        subscription.Status = "cancelled";
+        subscription.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return Result.Ok();
+    }
+}
