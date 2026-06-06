@@ -23,6 +23,7 @@ public class TenantDbContext(DbContextOptions<TenantDbContext> options, string s
             e.HasKey(x => x.Id);
             e.Property(x => x.Provider).HasMaxLength(50).IsRequired();
             e.Property(x => x.Phone).HasMaxLength(20);
+            e.Property(x => x.ConfigJson).HasColumnType("jsonb");
             e.Property(x => x.Status).HasMaxLength(50);
             e.HasQueryFilter(x => !x.IsDeleted);
         });
