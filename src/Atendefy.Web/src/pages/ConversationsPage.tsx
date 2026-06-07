@@ -45,7 +45,7 @@ export default function ConversationsPage() {
 
     es.onerror = () => {
       failures++;
-      if (failures > 5) es.close();
+      if (failures >= 5) es.close();
     };
 
     return () => es.close();
