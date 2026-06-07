@@ -101,9 +101,6 @@ public class ConversationWorker(
             Model: aiConfig.Model ?? "gpt-4o-mini"
         ));
 
-        var waProvider = whatsAppFactory.Create(waAccount.Provider, waAccount.ConfigJson);
-        await waProvider.SendMessageAsync(new OutboundMessage(msg.ContactPhone, aiResult.Content));
-
         contextMessages.Add(new("assistant", aiResult.Content));
         await conversationService.SaveSessionAsync(msg.TenantId, msg.ContactPhone, contextMessages);
 
@@ -113,5 +110,15 @@ public class ConversationWorker(
 
         logger.LogInformation("Mensagem processada para tenant {TenantId}, contato {Phone}",
             msg.TenantId, msg.ContactPhone);
+
+        try
+        {
+            var waProvider = whatsAppFactory.Create(waAccount.Provider, waAccount.ConfigJson);
+            await waProvider.SendMessageAsync(new OutboundMessage(msg.ContactPhone, aiResult.Content));
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Falha ao enviar resposta WhatsApp para {Phone} (conversa salva)", msg.ContactPhone);
+        }
     }
 }

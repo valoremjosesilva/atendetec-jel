@@ -7,6 +7,7 @@ namespace Atendefy.API.Infrastructure.Database;
 
 public class TenantDbContext(DbContextOptions<TenantDbContext> options, string schema) : DbContext(options)
 {
+    public string SchemaName => schema;
     public DbSet<WhatsAppAccount> WhatsAppAccounts => Set<WhatsAppAccount>();
     public DbSet<AiConfig> AiConfigs => Set<AiConfig>();
     public DbSet<Conversation> Conversations => Set<Conversation>();
