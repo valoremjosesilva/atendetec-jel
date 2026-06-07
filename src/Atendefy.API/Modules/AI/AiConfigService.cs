@@ -8,7 +8,7 @@ namespace Atendefy.API.Modules.AI;
 
 public class AiConfigService(TenantDbContextFactory dbFactory, string encryptionKey)
 {
-    private static readonly HashSet<string> ValidProviders = ["openai", "anthropic"];
+    private static readonly HashSet<string> ValidProviders = ["openai", "anthropic", "mock"];
 
     public async Task<Result<AiConfig>> UpsertAsync(string schemaName, AiConfigRequest request)
     {
