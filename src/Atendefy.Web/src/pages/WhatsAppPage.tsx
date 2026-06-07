@@ -50,21 +50,17 @@ function statusLabel(status: string): string {
 
 function QrDialog({ accountId }: { accountId: string }) {
   const [open, setOpen] = useState(false);
-  const [qrCode, setQrCode] = useState<string | null>(null);
   const connect = useConnectWhatsApp();
   const { data: statusData } = useWhatsAppStatus(accountId, open);
 
-  const isConnected = statusData?.status === 'open';
+  const isConnected = statusData?.status === 'open' || statusData?.status === 'connected';
+  const qrCode = connect.data?.qrCode ?? null;
 
   function handleOpen(value: boolean) {
     setOpen(value);
     if (value) {
-      setQrCode(null);
-      connect.mutate(accountId, {
-        onSuccess: (data) => {
-          if (data.qrCode) setQrCode(data.qrCode);
-        },
-      });
+      connect.reset();
+      connect.mutate(accountId);
     }
   }
 
@@ -91,7 +87,12 @@ function QrDialog({ accountId }: { accountId: string }) {
         ) : connect.isPending ? (
           <p className="py-6 text-muted-foreground">Gerando QR code…</p>
         ) : connect.isError ? (
-          <p className="py-6 text-sm text-destructive">Erro ao gerar QR code. Tente novamente.</p>
+          <div className="py-6 space-y-3">
+            <p className="text-sm text-destructive">Erro ao gerar QR code.</p>
+            <Button size="sm" variant="outline" onClick={() => { connect.reset(); connect.mutate(accountId); }}>
+              Tentar novamente
+            </Button>
+          </div>
         ) : qrCode ? (
           <div className="space-y-3">
             <img src={qrCode} alt="QR Code WhatsApp" className="mx-auto w-56 h-56 rounded-lg border" />
