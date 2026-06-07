@@ -161,6 +161,7 @@ app.MapAIEndpoints();
 app.MapWebhookEndpoints();
 app.MapBillingEndpoints();
 app.MapBillingWebhookEndpoints();
+app.MapConversationEndpoints();
 
 // Automatic migrations on startup
 using (var scope = app.Services.CreateScope())
