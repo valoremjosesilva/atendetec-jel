@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { MessageSquare, Phone } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useConversations, useConversationMessages } from '@/hooks/useConversations';
+import { useAuthStore } from '@/stores/authStore';
 
 function formatTime(dateStr: string): string {
   const d = new Date(dateStr);
@@ -15,7 +17,39 @@ function formatTime(dateStr: string): string {
 export default function ConversationsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { data, isLoading, isError } = useConversations();
-  const { data: detail, isLoading: loadingMessages, isError: messagesError } = useConversationMessages(selectedId);
+  const { data: detail, isLoading: loadingMessages, isError: messagesError } =
+    useConversationMessages(selectedId);
+
+  const queryClient = useQueryClient();
+  const selectedIdRef = useRef(selectedId);
+  useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
+
+  useEffect(() => {
+    const token = useAuthStore.getState().accessToken;
+    if (!token) return;
+
+    const url = `/api/conversations/stream?token=${encodeURIComponent(token)}`;
+    const es = new EventSource(url);
+    let failures = 0;
+
+    es.onmessage = (e) => {
+      try {
+        const { conversationId } = JSON.parse(e.data) as { conversationId: string };
+        queryClient.invalidateQueries({ queryKey: ['conversations'] });
+        queryClient.invalidateQueries({ queryKey: ['conversations', conversationId, 'messages'] });
+        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      } catch {
+        // ignore malformed events
+      }
+    };
+
+    es.onerror = () => {
+      failures++;
+      if (failures > 5) es.close();
+    };
+
+    return () => es.close();
+  }, [queryClient]);
 
   return (
     <div className="flex h-[calc(100vh-8rem)] gap-4">
@@ -35,17 +69,13 @@ export default function ConversationsPage() {
           {isError && (
             <p className="p-4 text-sm text-destructive">Erro ao carregar conversas.</p>
           )}
-
           {!isLoading && !isError && data?.conversations.length === 0 && (
             <div className="p-6 text-center text-sm text-muted-foreground">
               <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-30" />
               <p>Nenhuma conversa ainda.</p>
-              <p className="mt-1 text-xs">
-                Envie uma mensagem via WhatsApp para começar.
-              </p>
+              <p className="mt-1 text-xs">Envie uma mensagem via WhatsApp para começar.</p>
             </div>
           )}
-
           {data?.conversations.map((conv) => (
             <button
               key={conv.id}
@@ -102,7 +132,6 @@ export default function ConversationsPage() {
                   Erro ao carregar mensagens.
                 </p>
               )}
-
               {detail?.messages.map((msg) => (
                 <div
                   key={msg.id}
