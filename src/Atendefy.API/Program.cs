@@ -64,6 +64,18 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(opt =>
     {
         opt.MapInboundClaims = false;
+        opt.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = ctx =>
+            {
+                if (ctx.Request.Path.StartsWithSegments("/conversations/stream"))
+                {
+                    var t = ctx.Request.Query["token"].ToString();
+                    if (!string.IsNullOrEmpty(t)) ctx.Token = t;
+                }
+                return Task.CompletedTask;
+            }
+        };
         opt.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
