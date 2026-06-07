@@ -76,8 +76,9 @@ public class WhatsAppAccountService(
         if (stateResp.IsSuccessStatusCode)
         {
             var stateJson = await stateResp.Content.ReadFromJsonAsync<JsonElement>();
-            var state = stateJson.GetProperty("instance").GetProperty("state").GetString();
-            if (state == "open")
+            if (stateJson.TryGetProperty("instance", out var instanceEl) &&
+                instanceEl.TryGetProperty("state", out var stateEl) &&
+                stateEl.GetString() == "open")
             {
                 account.Status = "connected";
                 await db.SaveChangesAsync();
@@ -90,7 +91,9 @@ public class WhatsAppAccountService(
         if (!connectResp.IsSuccessStatusCode)
         {
             var createPayload = new { instanceName = cfg.Instance, integration = "WHATSAPP-BAILEYS" };
-            await client.PostAsJsonAsync($"{baseUrl}/instance/create", createPayload);
+            var createResp = await client.PostAsJsonAsync($"{baseUrl}/instance/create", createPayload);
+            if (!createResp.IsSuccessStatusCode)
+                return Result<WhatsAppConnectResult>.Fail("Falha ao criar instância na Evolution API.");
             connectResp = await client.GetAsync($"{baseUrl}/instance/connect/{cfg.Instance}");
         }
 
@@ -123,7 +126,10 @@ public class WhatsAppAccountService(
             return Result<string>.Ok("close");
 
         var json = await resp.Content.ReadFromJsonAsync<JsonElement>();
-        var state = json.GetProperty("instance").GetProperty("state").GetString() ?? "close";
+        var state = "close";
+        if (json.TryGetProperty("instance", out var instEl) &&
+            instEl.TryGetProperty("state", out var stEl))
+            state = stEl.GetString() ?? "close";
 
         if (state == "open" && account.Status != "connected")
         {
