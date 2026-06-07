@@ -9,6 +9,7 @@ public class AIProviderFactory(IHttpClientFactory httpClientFactory)
         {
             "openai" => new OpenAIProvider(client, apiKey),
             "anthropic" => new AnthropicProvider(client, apiKey),
+            "mock" => new MockAIProvider(),
             _ => throw new ArgumentException($"Provider de IA desconhecido: {provider}")
         };
     }
