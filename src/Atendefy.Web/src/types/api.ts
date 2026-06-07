@@ -106,3 +106,35 @@ export interface SubscriptionResponse {
     paidAt?: string;
   };
 }
+
+// Conversations
+export interface ConversationSummary {
+  id: string;
+  contactPhone: string;
+  messageCount: number;
+  startedAt: string;
+  lastMessageAt: string;
+}
+
+export interface ConversationMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  tokensUsed: number;
+  createdAt: string;
+}
+
+export interface ConversationDetail {
+  id: string;
+  contactPhone: string;
+  startedAt: string;
+  messageCount: number;
+  messages: ConversationMessage[];
+}
+
+export interface ConversationsListResponse {
+  conversations: ConversationSummary[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
