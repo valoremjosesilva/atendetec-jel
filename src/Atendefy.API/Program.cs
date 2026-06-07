@@ -93,6 +93,7 @@ builder.Services.AddScoped<EvolutionWebhookValidator>();
 
 // Chatbot
 builder.Services.AddSingleton<ConversationService>();
+builder.Services.AddSingleton<IConversationEventEmitter, ConversationEventEmitter>();
 builder.Services.AddHostedService(sp => new ConversationWorker(
     sp.GetRequiredService<RedisStreamService>(),
     sp.GetRequiredService<ConversationService>(),
