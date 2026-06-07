@@ -13,9 +13,7 @@ public class AiConfigService(TenantDbContextFactory dbFactory, string encryption
     public async Task<Result<AiConfig>> UpsertAsync(string schemaName, AiConfigRequest request)
     {
         if (!ValidProviders.Contains(request.Provider))
-            return Result<AiConfig>.Fail("Provider inválido. Use 'openai' ou 'anthropic'.");
-        if (string.IsNullOrWhiteSpace(request.ApiKey))
-            return Result<AiConfig>.Fail("ApiKey é obrigatória.");
+            return Result<AiConfig>.Fail("Provider inválido. Use 'openai', 'anthropic' ou 'mock'.");
         if (string.IsNullOrWhiteSpace(request.SystemPrompt))
             return Result<AiConfig>.Fail("SystemPrompt é obrigatório.");
 
@@ -25,13 +23,17 @@ public class AiConfigService(TenantDbContextFactory dbFactory, string encryption
         if (existing is not null)
         {
             existing.Provider = request.Provider;
-            existing.ApiKeyEncrypted = AesEncryption.Encrypt(request.ApiKey, encryptionKey);
+            if (!string.IsNullOrWhiteSpace(request.ApiKey))
+                existing.ApiKeyEncrypted = AesEncryption.Encrypt(request.ApiKey, encryptionKey);
             existing.Model = request.Model;
             existing.SystemPrompt = request.SystemPrompt;
             existing.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
             return Result<AiConfig>.Ok(existing);
         }
+
+        if (string.IsNullOrWhiteSpace(request.ApiKey))
+            return Result<AiConfig>.Fail("ApiKey é obrigatória para nova configuração.");
 
         var config = new AiConfig
         {
