@@ -39,7 +39,7 @@ public class ConversationService(RedisService redis)
         return messages;
     }
 
-    public static async Task PersistAsync(
+    public static async Task<Guid> PersistAsync(
         TenantDbContextFactory dbFactory,
         string schemaName,
         string contactPhone,
@@ -87,5 +87,6 @@ public class ConversationService(RedisService redis)
         counter.TokensConsumed += tokensUsed;
 
         await db.SaveChangesAsync();
+        return conversation.Id;
     }
 }

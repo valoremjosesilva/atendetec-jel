@@ -9,6 +9,7 @@ using Atendefy.API.Modules.WhatsApp.Models;
 using Atendefy.API.SharedKernel.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 
 namespace Atendefy.API.Modules.Chatbot;
 
@@ -20,6 +21,7 @@ public class ConversationWorker(
     WhatsAppProviderFactory whatsAppFactory,
     TenantRateLimiter rateLimiter,
     string encryptionKey,
+    IConversationEventEmitter emitter,
     ILogger<ConversationWorker> logger) : BackgroundService
 {
     private const string StreamName = "messages.inbound";
@@ -104,9 +106,12 @@ public class ConversationWorker(
         contextMessages.Add(new("assistant", aiResult.Content));
         await conversationService.SaveSessionAsync(msg.TenantId, msg.ContactPhone, contextMessages);
 
-        await ConversationService.PersistAsync(
+        var conversationId = await ConversationService.PersistAsync(
             tenantDbFactory, msg.SchemaName, msg.ContactPhone,
             msg.MessageText, aiResult.Content, aiResult.TokensUsed);
+
+        emitter.Emit(msg.TenantId, JsonSerializer.Serialize(
+            new { type = "message_added", conversationId }));
 
         logger.LogInformation("Mensagem processada para tenant {TenantId}, contato {Phone}",
             msg.TenantId, msg.ContactPhone);

@@ -102,6 +102,7 @@ builder.Services.AddHostedService(sp => new ConversationWorker(
     sp.GetRequiredService<WhatsAppProviderFactory>(),
     sp.GetRequiredService<TenantRateLimiter>(),
     encryptionKey,
+    sp.GetRequiredService<IConversationEventEmitter>(),
     sp.GetRequiredService<ILogger<ConversationWorker>>()));
 
 // Billing
