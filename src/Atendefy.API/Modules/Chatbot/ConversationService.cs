@@ -30,10 +30,7 @@ public class ConversationService(RedisService redis)
     public static List<ChatMessage> BuildContextMessages(
         List<ChatMessage> history, string newUserMessage)
     {
-        var messages = new List<ChatMessage>(history)
-        {
-            new("user", newUserMessage)
-        };
+        var messages = new List<ChatMessage>(history) { new("user", newUserMessage) };
         if (messages.Count > 20)
             messages = messages.TakeLast(20).ToList();
         return messages;
@@ -45,7 +42,8 @@ public class ConversationService(RedisService redis)
         string contactPhone,
         string userMessage,
         string assistantReply,
-        int tokensUsed)
+        int tokensUsed,
+        Guid? accountId = null)
     {
         await using var db = dbFactory.Create(schemaName);
 
@@ -54,9 +52,13 @@ public class ConversationService(RedisService redis)
 
         if (conversation is null)
         {
-            conversation = new Conversation { ContactPhone = contactPhone };
+            conversation = new Conversation { ContactPhone = contactPhone, AccountId = accountId };
             db.Conversations.Add(conversation);
             await db.SaveChangesAsync();
+        }
+        else if (accountId.HasValue && conversation.AccountId is null)
+        {
+            conversation.AccountId = accountId;
         }
 
         db.Messages.AddRange(
@@ -86,6 +88,41 @@ public class ConversationService(RedisService redis)
         counter.MessagesSent++;
         counter.TokensConsumed += tokensUsed;
 
+        await db.SaveChangesAsync();
+        return conversation.Id;
+    }
+
+    public static async Task<Guid> PersistUserOnlyAsync(
+        TenantDbContextFactory dbFactory,
+        string schemaName,
+        string contactPhone,
+        string userMessage,
+        Guid? accountId = null)
+    {
+        await using var db = dbFactory.Create(schemaName);
+
+        var conversation = await db.Conversations
+            .FirstOrDefaultAsync(c => c.ContactPhone == contactPhone);
+
+        if (conversation is null)
+        {
+            conversation = new Conversation { ContactPhone = contactPhone, AccountId = accountId };
+            db.Conversations.Add(conversation);
+            await db.SaveChangesAsync();
+        }
+        else if (accountId.HasValue && conversation.AccountId is null)
+        {
+            conversation.AccountId = accountId;
+        }
+
+        db.Messages.Add(new ConversationMessage
+        {
+            ConversationId = conversation.Id,
+            Role = "user",
+            Content = userMessage
+        });
+
+        conversation.MessageCount++;
         await db.SaveChangesAsync();
         return conversation.Id;
     }
