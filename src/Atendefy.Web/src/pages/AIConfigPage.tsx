@@ -22,6 +22,7 @@ import { Textarea } from '@/components/ui/textarea';
 const MODELS: Record<string, string[]> = {
   openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
   anthropic: ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
+  mock: ['mock'],
 };
 
 export default function AIConfigPage() {
@@ -93,6 +94,7 @@ export default function AIConfigPage() {
                 <SelectContent>
                   <SelectItem value="openai">OpenAI</SelectItem>
                   <SelectItem value="anthropic">Anthropic</SelectItem>
+                  <SelectItem value="mock">Mock (testes)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
