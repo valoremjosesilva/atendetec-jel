@@ -36,6 +36,7 @@ export default function ConversationsPage() {
         queryClient.invalidateQueries({ queryKey: ['conversations'] });
         queryClient.invalidateQueries({ queryKey: ['conversations', conversationId, 'messages'] });
         queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+        failures = 0;
       } catch {
         console.warn('[SSE] malformed event data:', e.data);
       }

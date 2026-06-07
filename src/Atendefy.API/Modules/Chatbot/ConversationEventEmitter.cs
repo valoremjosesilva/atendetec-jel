@@ -14,7 +14,14 @@ public class ConversationEventEmitter : IConversationEventEmitter
 
     public void Unsubscribe(string tenantId, ChannelWriter<string> writer)
     {
-        lock (_lock) { if (_subs.TryGetValue(tenantId, out var list)) list.Remove(writer); }
+        lock (_lock)
+        {
+            if (_subs.TryGetValue(tenantId, out var list))
+            {
+                list.Remove(writer);
+                if (list.Count == 0) _subs.TryRemove(tenantId, out _);
+            }
+        }
     }
 
     public void Emit(string tenantId, string data)
