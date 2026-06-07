@@ -1,4 +1,5 @@
 using Atendefy.API.Infrastructure.Cache;
+using Npgsql;
 using Atendefy.API.Infrastructure.Database;
 using Atendefy.API.Infrastructure.Messaging;
 using Atendefy.API.Infrastructure.RateLimiting;
@@ -184,6 +185,30 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<PublicDbContext>();
     try { await db.Database.MigrateAsync(); }
     catch (Exception ex) { Log.Fatal(ex, "Database migration failed"); throw; }
+}
+
+// Tenant schema migrations (idempotent — safe to re-run on every startup)
+using (var tenantMigScope = app.Services.CreateScope())
+{
+    var publicDb2 = tenantMigScope.ServiceProvider.GetRequiredService<PublicDbContext>();
+    var tenants = await publicDb2.Tenants.ToListAsync();
+    foreach (var t in tenants)
+    {
+        await using var conn = new NpgsqlConnection(connStr);
+        await conn.OpenAsync();
+        var migSql = $"""
+            ALTER TABLE IF EXISTS "{t.SchemaName}".conversations
+                ADD COLUMN IF NOT EXISTS bot_paused BOOLEAN DEFAULT FALSE,
+                ADD COLUMN IF NOT EXISTS account_id UUID;
+            CREATE TABLE IF NOT EXISTS "{t.SchemaName}".contacts (
+                phone VARCHAR(30) PRIMARY KEY,
+                name VARCHAR(200),
+                created_at TIMESTAMPTZ DEFAULT NOW()
+            );
+            """;
+        await using var cmd = new NpgsqlCommand(migSql, conn);
+        await cmd.ExecuteNonQueryAsync();
+    }
 }
 
 app.Run();

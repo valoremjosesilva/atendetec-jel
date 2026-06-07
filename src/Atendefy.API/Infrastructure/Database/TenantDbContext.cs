@@ -44,6 +44,8 @@ public class TenantDbContext(DbContextOptions<TenantDbContext> options, string s
             e.Property(x => x.ContactPhone).HasMaxLength(30).IsRequired();
             e.HasMany(x => x.Messages).WithOne().HasForeignKey(x => x.ConversationId);
             e.HasQueryFilter(x => !x.IsDeleted);
+            e.Property(x => x.BotPaused).HasDefaultValue(false);
+            e.Property(x => x.AccountId);
         });
 
         modelBuilder.Entity<ConversationMessage>(e =>

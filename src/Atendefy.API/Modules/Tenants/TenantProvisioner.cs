@@ -40,7 +40,9 @@ public class TenantProvisioner(string connectionString) : ITenantProvisioner
                 contact_phone VARCHAR(30) NOT NULL,
                 started_at TIMESTAMPTZ DEFAULT NOW(),
                 message_count INT DEFAULT 0,
-                is_deleted BOOLEAN DEFAULT FALSE
+                is_deleted BOOLEAN DEFAULT FALSE,
+                bot_paused BOOLEAN DEFAULT FALSE,
+                account_id UUID
             );
 
             CREATE TABLE IF NOT EXISTS "{schemaName}".messages (
@@ -57,6 +59,12 @@ public class TenantProvisioner(string connectionString) : ITenantProvisioner
                 messages_sent INT DEFAULT 0,
                 tokens_consumed BIGINT DEFAULT 0,
                 cost_usd DECIMAL(10,4) DEFAULT 0
+            );
+
+            CREATE TABLE IF NOT EXISTS "{schemaName}".contacts (
+                phone VARCHAR(30) PRIMARY KEY,
+                name VARCHAR(200),
+                created_at TIMESTAMPTZ DEFAULT NOW()
             );
             """;
 
