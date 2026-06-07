@@ -21,9 +21,17 @@ public static class DashboardEndpoints
             var firstOfMonth = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
             var currentMonth = now.ToString("yyyy-MM");
 
-            var totalConversations = await db.Conversations.CountAsync();
-            var conversationsThisMonth = await db.Conversations
-                .CountAsync(c => c.StartedAt >= firstOfMonth);
+            var counts = await db.Conversations
+                .GroupBy(_ => 1)
+                .Select(g => new
+                {
+                    Total     = g.Count(),
+                    ThisMonth = g.Count(c => c.StartedAt >= firstOfMonth)
+                })
+                .FirstOrDefaultAsync();
+
+            var totalConversations     = counts?.Total ?? 0;
+            var conversationsThisMonth = counts?.ThisMonth ?? 0;
 
             var usage = await db.UsageCounters.FindAsync(currentMonth);
 
