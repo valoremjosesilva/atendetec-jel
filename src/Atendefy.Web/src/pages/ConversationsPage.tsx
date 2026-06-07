@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { MessageSquare, Phone } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -21,8 +21,6 @@ export default function ConversationsPage() {
     useConversationMessages(selectedId);
 
   const queryClient = useQueryClient();
-  const selectedIdRef = useRef(selectedId);
-  useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
 
   useEffect(() => {
     const token = useAuthStore.getState().accessToken;
@@ -39,13 +37,13 @@ export default function ConversationsPage() {
         queryClient.invalidateQueries({ queryKey: ['conversations', conversationId, 'messages'] });
         queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
       } catch {
-        // ignore malformed events
+        console.warn('[SSE] malformed event data:', e.data);
       }
     };
 
     es.onerror = () => {
       failures++;
-      if (failures >= 5) es.close();
+      if (failures >= 5) { es.close(); return; }
     };
 
     return () => es.close();
