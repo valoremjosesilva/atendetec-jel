@@ -28,7 +28,6 @@ public static class ConversationEndpoints
             await using var db = dbFactory.Create(schemaName);
 
             var conversations = await db.Conversations
-                .Where(c => !c.IsDeleted)
                 .Select(c => new
                 {
                     c.Id,
@@ -42,7 +41,7 @@ public static class ConversationEndpoints
                 .Take(pageSize)
                 .ToListAsync();
 
-            var total = await db.Conversations.CountAsync(c => !c.IsDeleted);
+            var total = await db.Conversations.CountAsync();
 
             return Results.Ok(new { conversations, total, page, pageSize });
         });
@@ -59,7 +58,7 @@ public static class ConversationEndpoints
             await using var db = dbFactory.Create(schemaName);
 
             var conversation = await db.Conversations
-                .FirstOrDefaultAsync(c => c.Id == id && !c.IsDeleted);
+                .FirstOrDefaultAsync(c => c.Id == id);
             if (conversation is null) return Results.NotFound();
 
             var messages = await db.Messages
