@@ -145,5 +145,5 @@ export interface DashboardStats {
   messagesThisMonth: number;
   tokensThisMonth: number;
   costThisMonth: number;
-  whatsAppStatus: string;
+  whatsAppStatus: 'open' | 'close' | 'connecting' | 'none' | string;
 }

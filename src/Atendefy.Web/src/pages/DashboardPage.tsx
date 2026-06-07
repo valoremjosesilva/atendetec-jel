@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useDashboardStats } from '@/hooks/useDashboard';
 
 export default function DashboardPage() {
-  const { data: stats, isLoading } = useDashboardStats();
+  const { data: stats, isLoading, isError } = useDashboardStats();
   const waConnected = stats?.whatsAppStatus === 'open';
 
   return (
@@ -17,12 +17,15 @@ export default function DashboardPage() {
           WhatsApp {isLoading ? '…' : (waConnected ? 'conectado' : (stats?.whatsAppStatus ?? 'none'))}
         </Badge>
       </div>
+      {isError && (
+        <p className="text-sm text-destructive">Falha ao carregar estatísticas.</p>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           title="Conversas este mês"
           value={isLoading ? '…' : String(stats?.conversationsThisMonth ?? 0)}
-          sub={`${stats?.totalConversations ?? 0} no total`}
+          sub={isLoading ? undefined : `${stats?.totalConversations ?? 0} no total`}
           icon={<MessageSquare className="h-4 w-4 text-muted-foreground" />}
         />
         <StatCard
