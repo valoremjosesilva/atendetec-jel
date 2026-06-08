@@ -8,6 +8,7 @@ import WhatsAppPage from '@/pages/WhatsAppPage';
 import AIConfigPage from '@/pages/AIConfigPage';
 import BillingPage from '@/pages/BillingPage';
 import ConversationsPage from '@/pages/ConversationsPage';
+import ContactsPage from '@/pages/ContactsPage';
 
 const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -22,6 +23,7 @@ const router = createBrowserRouter([
           { path: '/whatsapp', element: <WhatsAppPage /> },
           { path: '/ai-config', element: <AIConfigPage /> },
           { path: '/conversations', element: <ConversationsPage /> },
+          { path: '/contacts', element: <ContactsPage /> },
           { path: '/billing', element: <BillingPage /> },
         ],
       },

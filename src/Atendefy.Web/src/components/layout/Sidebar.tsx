@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   LogOut,
   MessageSquare,
+  Users,
   Wifi,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
@@ -15,6 +16,7 @@ const navItems = [
   { to: '/whatsapp', label: 'WhatsApp', icon: Wifi },
   { to: '/ai-config', label: 'IA', icon: Bot },
   { to: '/conversations', label: 'Conversas', icon: MessageSquare },
+  { to: '/contacts', label: 'Contatos', icon: Users },
   { to: '/billing', label: 'Billing', icon: CreditCard },
 ];
 
