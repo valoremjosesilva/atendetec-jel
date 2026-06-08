@@ -7,6 +7,7 @@ import {
   MessageSquare,
   Users,
   Wifi,
+  Zap,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
 import { cn } from '@/lib/utils';
@@ -17,6 +18,7 @@ const navItems = [
   { to: '/ai-config', label: 'IA', icon: Bot },
   { to: '/conversations', label: 'Conversas', icon: MessageSquare },
   { to: '/contacts', label: 'Contatos', icon: Users },
+  { to: '/quick-replies', label: 'Respostas Rápidas', icon: Zap },
   { to: '/billing', label: 'Billing', icon: CreditCard },
 ];
 

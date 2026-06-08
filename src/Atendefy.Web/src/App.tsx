@@ -9,6 +9,7 @@ import AIConfigPage from '@/pages/AIConfigPage';
 import BillingPage from '@/pages/BillingPage';
 import ConversationsPage from '@/pages/ConversationsPage';
 import ContactsPage from '@/pages/ContactsPage';
+import QuickRepliesPage from '@/pages/QuickRepliesPage';
 
 const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
@@ -24,6 +25,7 @@ const router = createBrowserRouter([
           { path: '/ai-config', element: <AIConfigPage /> },
           { path: '/conversations', element: <ConversationsPage /> },
           { path: '/contacts', element: <ContactsPage /> },
+          { path: '/quick-replies', element: <QuickRepliesPage /> },
           { path: '/billing', element: <BillingPage /> },
         ],
       },
