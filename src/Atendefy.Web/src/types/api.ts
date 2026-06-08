@@ -115,6 +115,7 @@ export interface ConversationSummary {
   startedAt: string;
   lastMessageAt: string;
   botPaused: boolean;
+  isResolved: boolean;
 }
 
 export interface ConversationMessage {
@@ -131,6 +132,8 @@ export interface ConversationDetail {
   startedAt: string;
   messageCount: number;
   botPaused: boolean;
+  isResolved: boolean;
+  resolvedAt?: string;
   messages: ConversationMessage[];
 }
 
@@ -172,4 +175,15 @@ export interface ContactsListResponse {
   total: number;
   page: number;
   pageSize: number;
+}
+
+export interface QuickReply {
+  id: string;
+  title: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface QuickRepliesListResponse {
+  quickReplies: QuickReply[];
 }
