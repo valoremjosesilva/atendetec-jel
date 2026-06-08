@@ -14,6 +14,7 @@ public class TenantDbContext(DbContextOptions<TenantDbContext> options, string s
     public DbSet<ConversationMessage> Messages => Set<ConversationMessage>();
     public DbSet<UsageCounter> UsageCounters => Set<UsageCounter>();
     public DbSet<Contact> Contacts => Set<Contact>();
+    public DbSet<QuickReply> QuickReplies => Set<QuickReply>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -73,6 +74,14 @@ public class TenantDbContext(DbContextOptions<TenantDbContext> options, string s
             e.HasKey(x => x.Phone);
             e.Property(x => x.Phone).HasMaxLength(30);
             e.Property(x => x.Name).HasMaxLength(200);
+        });
+
+        modelBuilder.Entity<QuickReply>(e =>
+        {
+            e.ToTable("quick_replies");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Title).HasMaxLength(100).IsRequired();
+            e.Property(x => x.Body).IsRequired();
         });
     }
 }

@@ -210,6 +210,12 @@ using (var tenantMigScope = app.Services.CreateScope())
                     name VARCHAR(200),
                     created_at TIMESTAMPTZ DEFAULT NOW()
                 );
+                CREATE TABLE IF NOT EXISTS "{t.SchemaName}".quick_replies (
+                    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    title VARCHAR(100) NOT NULL,
+                    body TEXT NOT NULL,
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                );
                 """;
             await using var cmd = new NpgsqlCommand(migSql, conn);
             await cmd.ExecuteNonQueryAsync();
