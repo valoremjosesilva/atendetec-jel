@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import {
   useCancelSubscription,
   usePlans,
@@ -36,6 +38,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { BillingProvider, BillingType, SubscriptionStatus } from '@/lib/constants';
+
+// ── Stripe setup ─────────────────────────────────────────────────────────────
+
+const stripeKey = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY as string | undefined;
+const stripePromise = stripeKey ? loadStripe(stripeKey) : null;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 type BillingCycle = 'monthly' | 'yearly';
 
@@ -48,10 +58,132 @@ function parseLimits(json: string): PlanLimits {
 }
 
 function subStatusVariant(status: string): 'default' | 'destructive' | 'secondary' {
-  if (status === 'active') return 'default';
-  if (status === 'past_due' || status === 'suspended') return 'destructive';
+  if (status === SubscriptionStatus.ACTIVE) return 'default';
+  if (status === SubscriptionStatus.PAST_DUE || status === SubscriptionStatus.SUSPENDED) return 'destructive';
   return 'secondary';
 }
+
+function maskCpfCnpj(raw: string): string {
+  const d = raw.replace(/\D/g, '').slice(0, 14);
+  const n = d.length;
+  if (n <= 3) return d;
+  if (n <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
+  if (n <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
+  if (n <= 11) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+  if (n <= 12) return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8)}`;
+  return `${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
+}
+
+function validateCpf(d: string): boolean {
+  if (/^(\d)\1{10}$/.test(d)) return false;
+  const calc = (len: number) => {
+    const sum = Array.from({ length: len }, (_, i) => +d[i] * (len + 1 - i)).reduce((a, b) => a + b, 0);
+    const r = (sum * 10) % 11;
+    return r >= 10 ? 0 : r;
+  };
+  return calc(9) === +d[9] && calc(10) === +d[10];
+}
+
+function validateCnpj(d: string): boolean {
+  if (/^(\d)\1{13}$/.test(d)) return false;
+  const w1 = [5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const w2 = [6, 5, 4, 3, 2, 9, 8, 7, 6, 5, 4, 3, 2];
+  const calc = (weights: number[]) => {
+    const sum = weights.reduce((acc, w, i) => acc + +d[i] * w, 0);
+    const r = sum % 11;
+    return r < 2 ? 0 : 11 - r;
+  };
+  return calc(w1) === +d[12] && calc(w2) === +d[13];
+}
+
+function isValidCpfCnpj(value: string): boolean {
+  const d = value.replace(/\D/g, '');
+  if (d.length === 11) return validateCpf(d);
+  if (d.length === 14) return validateCnpj(d);
+  return false;
+}
+
+// ── Stripe checkout form (must live inside <Elements>) ────────────────────────
+
+function StripeCheckoutForm({
+  plan,
+  cycle,
+  subscribe,
+  onSuccess,
+  onError,
+}: {
+  plan: Plan;
+  cycle: BillingCycle;
+  subscribe: ReturnType<typeof useSubscribe>;
+  onSuccess: () => void;
+  onError: (msg: string) => void;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [confirming, setConfirming] = useState(false);
+
+  async function handleConfirm() {
+    if (!stripe || !elements) return;
+    setConfirming(true);
+    try {
+      const result = await subscribe.mutateAsync({
+        planId: plan.id,
+        provider: BillingProvider.STRIPE,
+        billingType: BillingType.CREDIT_CARD,
+        billingCycle: cycle,
+      });
+
+      if (result.clientSecret) {
+        const cardElement = elements.getElement(CardElement);
+        if (!cardElement) throw new Error('Elemento de cartão não encontrado.');
+        const { error } = await stripe.confirmCardPayment(result.clientSecret, {
+          payment_method: { card: cardElement },
+        });
+        if (error) throw new Error(error.message ?? 'Erro ao confirmar pagamento.');
+      }
+
+      onSuccess();
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error
+          ? err.message
+          : ((err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+            'Erro ao processar assinatura.');
+      onError(msg);
+    } finally {
+      setConfirming(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-md border bg-background px-3 py-2.5">
+        <CardElement
+          options={{
+            style: {
+              base: {
+                fontSize: '14px',
+                fontFamily: 'inherit',
+                color: 'inherit',
+                '::placeholder': { color: '#9ca3af' },
+              },
+              invalid: { color: '#ef4444' },
+            },
+          }}
+        />
+      </div>
+      <Button
+        className="w-full"
+        onClick={handleConfirm}
+        disabled={!stripe || confirming || subscribe.isPending}
+      >
+        {confirming || subscribe.isPending ? 'Processando…' : 'Confirmar pagamento'}
+      </Button>
+    </div>
+  );
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
 
 export default function BillingPage() {
   const { data: plans, isLoading: loadingPlans } = usePlans();
@@ -62,38 +194,48 @@ export default function BillingPage() {
   const [cancelError, setCancelError] = useState('');
   const [cycle, setCycle] = useState<BillingCycle>('monthly');
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
-  const [provider, setProvider] = useState('asaas');
-  const [billingType, setBillingType] = useState('BOLETO');
+  const [provider, setProvider] = useState<string>(BillingProvider.ASAAS);
+  const [billingType, setBillingType] = useState<string>(BillingType.BOLETO);
   const [cpfCnpj, setCpfCnpj] = useState('');
   const [paymentMethodId, setPaymentMethodId] = useState('');
   const [invoiceResult, setInvoiceResult] = useState<InvoiceResult | null>(null);
   const [dialogError, setDialogError] = useState('');
+  const [stripeSuccess, setStripeSuccess] = useState(false);
+
+  const showStripeCard =
+    provider === BillingProvider.STRIPE && billingType === BillingType.CREDIT_CARD;
 
   function openSubscribeDialog(plan: Plan) {
     setSelectedPlan(plan);
-    setProvider('asaas');
-    setBillingType('BOLETO');
+    setProvider(BillingProvider.ASAAS);
+    setBillingType(BillingType.BOLETO);
     setCpfCnpj('');
     setPaymentMethodId('');
     setDialogError('');
     setInvoiceResult(null);
+    setStripeSuccess(false);
   }
 
   function handleProviderChange(v: string) {
     setProvider(v);
-    setBillingType(v === 'stripe' ? 'CREDIT_CARD' : 'BOLETO');
+    setBillingType(v === BillingProvider.STRIPE ? BillingType.CREDIT_CARD : BillingType.BOLETO);
+    setDialogError('');
   }
 
   async function handleSubscribe() {
     if (!selectedPlan) return;
     setDialogError('');
+    if (provider === BillingProvider.ASAAS && !isValidCpfCnpj(cpfCnpj)) {
+      setDialogError('CPF ou CNPJ inválido. Verifique o número digitado.');
+      return;
+    }
     const req: CreateSubscriptionRequest = {
       planId: selectedPlan.id,
       provider,
       billingType,
       billingCycle: cycle,
-      cpfCnpj: provider === 'asaas' ? cpfCnpj : undefined,
-      paymentMethodId: billingType === 'CREDIT_CARD' ? paymentMethodId : undefined,
+      cpfCnpj: provider === BillingProvider.ASAAS ? cpfCnpj : undefined,
+      paymentMethodId: billingType === BillingType.CREDIT_CARD ? paymentMethodId : undefined,
     };
     try {
       const result = await subscribe.mutateAsync(req);
@@ -162,7 +304,7 @@ export default function BillingPage() {
               </p>
             )}
             {cancelError && <p className="text-sm text-destructive">{cancelError}</p>}
-            {subscription.status !== 'cancelled' && (
+            {subscription.status !== SubscriptionStatus.CANCELLED && (
               <Button
                 variant="destructive"
                 size="sm"
@@ -232,7 +374,7 @@ export default function BillingPage() {
 
       {/* Subscribe dialog */}
       <Dialog
-        open={!!selectedPlan && !invoiceResult}
+        open={!!selectedPlan && !invoiceResult && !stripeSuccess}
         onOpenChange={(o) => !o && setSelectedPlan(null)}
       >
         <DialogContent className="max-w-md">
@@ -240,6 +382,7 @@ export default function BillingPage() {
             <DialogTitle>Assinar {selectedPlan?.name}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {/* Provider */}
             <div className="space-y-1">
               <Label>Provedor de pagamento</Label>
               <Select value={provider} onValueChange={(v) => v && handleProviderChange(v)}>
@@ -247,13 +390,14 @@ export default function BillingPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="asaas">Asaas (Boleto / PIX)</SelectItem>
-                  <SelectItem value="stripe">Stripe (Cartão de crédito)</SelectItem>
+                  <SelectItem value={BillingProvider.ASAAS}>Asaas (Boleto / PIX)</SelectItem>
+                  <SelectItem value={BillingProvider.STRIPE}>Stripe (Cartão de crédito)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {provider === 'asaas' && (
+            {/* Billing type — Asaas only */}
+            {provider === BillingProvider.ASAAS && (
               <div className="space-y-1">
                 <Label>Forma de pagamento</Label>
                 <Select value={billingType} onValueChange={(v) => v && setBillingType(v)}>
@@ -261,60 +405,98 @@ export default function BillingPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="BOLETO">Boleto bancário</SelectItem>
-                    <SelectItem value="PIX">PIX</SelectItem>
-                    <SelectItem value="CREDIT_CARD">Cartão de crédito</SelectItem>
+                    <SelectItem value={BillingType.BOLETO}>Boleto bancário</SelectItem>
+                    <SelectItem value={BillingType.PIX}>PIX</SelectItem>
+                    <SelectItem value={BillingType.CREDIT_CARD}>Cartão de crédito</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             )}
 
-            {provider === 'asaas' && (
+            {/* CPF/CNPJ — Asaas only */}
+            {provider === BillingProvider.ASAAS && (
               <div className="space-y-1">
                 <Label htmlFor="cpfCnpj">CPF ou CNPJ</Label>
                 <Input
                   id="cpfCnpj"
-                  placeholder="000.000.000-00"
+                  placeholder="000.000.000-00 ou 00.000.000/0000-00"
                   value={cpfCnpj}
-                  onChange={(e) => setCpfCnpj(e.target.value)}
+                  onChange={(e) => setCpfCnpj(maskCpfCnpj(e.target.value))}
+                  inputMode="numeric"
                 />
               </div>
             )}
 
-            {billingType === 'CREDIT_CARD' && (
+            {/* Asaas credit card token */}
+            {provider === BillingProvider.ASAAS && billingType === BillingType.CREDIT_CARD && (
               <div className="space-y-1">
-                <Label htmlFor="paymentMethodId">
-                  {provider === 'stripe' ? 'Stripe Payment Method ID' : 'Token do cartão (Asaas)'}
-                </Label>
+                <Label htmlFor="paymentMethodId">Token do cartão (Asaas)</Label>
                 <Input
                   id="paymentMethodId"
-                  placeholder={provider === 'stripe' ? 'pm_xxx' : 'tokenCreditCard_xxx'}
+                  placeholder="tokenCreditCard_xxx"
                   value={paymentMethodId}
                   onChange={(e) => setPaymentMethodId(e.target.value)}
                 />
-                {provider === 'stripe' && (
-                  <p className="text-xs text-muted-foreground">
-                    Em produção, use Stripe.js Elements para obter o paymentMethodId de forma
-                    segura.
-                  </p>
-                )}
               </div>
             )}
 
+            {/* Error (always visible above submit) */}
             {dialogError && <p className="text-sm text-destructive">{dialogError}</p>}
 
+            {/* Stripe Elements card form */}
+            {showStripeCard ? (
+              stripePromise ? (
+                <Elements stripe={stripePromise}>
+                  <StripeCheckoutForm
+                    plan={selectedPlan!}
+                    cycle={cycle}
+                    subscribe={subscribe}
+                    onSuccess={() => setStripeSuccess(true)}
+                    onError={(msg) => setDialogError(msg)}
+                  />
+                </Elements>
+              ) : (
+                <p className="text-xs text-amber-600 border border-amber-200 rounded-md p-2">
+                  Stripe não configurado. Adicione{' '}
+                  <code className="font-mono">VITE_STRIPE_PUBLISHABLE_KEY</code> ao .env.
+                </p>
+              )
+            ) : (
+              <Button
+                className="w-full"
+                onClick={handleSubscribe}
+                disabled={subscribe.isPending}
+              >
+                {subscribe.isPending ? 'Processando…' : 'Confirmar assinatura'}
+              </Button>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Stripe success dialog */}
+      <Dialog open={stripeSuccess} onOpenChange={(o) => !o && (setStripeSuccess(false), setSelectedPlan(null))}>
+        <DialogContent className="max-w-sm text-center">
+          <DialogHeader>
+            <DialogTitle>Pagamento enviado!</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-4xl">✓</p>
+            <p className="text-sm text-muted-foreground">
+              Seu pagamento foi confirmado. A assinatura será ativada em instantes após a
+              confirmação bancária.
+            </p>
             <Button
               className="w-full"
-              onClick={handleSubscribe}
-              disabled={subscribe.isPending}
+              onClick={() => { setStripeSuccess(false); setSelectedPlan(null); }}
             >
-              {subscribe.isPending ? 'Processando…' : 'Confirmar assinatura'}
+              Fechar
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Invoice result dialog */}
+      {/* Asaas invoice result dialog */}
       <Dialog open={!!invoiceResult} onOpenChange={(o) => !o && closeInvoiceDialog()}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -362,12 +544,6 @@ export default function BillingPage() {
                     Copiar código PIX
                   </Button>
                 </div>
-              )}
-
-              {invoiceResult.clientSecret && (
-                <p className="text-sm text-muted-foreground">
-                  Pagamento Stripe iniciado. Use Stripe.js com o client_secret para confirmar.
-                </p>
               )}
 
               <Button className="w-full" onClick={closeInvoiceDialog}>

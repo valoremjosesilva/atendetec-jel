@@ -21,8 +21,13 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, QrCode } from 'lucide-react';
+import { WhatsAppStatus, WhatsAppProvider } from '@/lib/constants';
 
 type Provider = 'meta' | 'evolution';
+
+function isValidPhone(phone: string): boolean {
+  return /^\+\d{10,15}$/.test(phone.trim());
+}
 
 const CONFIG_PLACEHOLDER: Record<Provider, string> = {
   meta: JSON.stringify({ phoneNumberId: '1234567890', accessToken: 'EAAxxxxxxx' }, null, 2),
@@ -34,15 +39,15 @@ const CONFIG_PLACEHOLDER: Record<Provider, string> = {
 };
 
 function statusVariant(status: string): 'default' | 'secondary' | 'outline' {
-  if (status === 'connected' || status === 'open') return 'default';
-  if (status === 'disconnected' || status === 'close') return 'secondary';
+  if (status === WhatsAppStatus.CONNECTED || status === WhatsAppStatus.OPEN) return 'default';
+  if (status === WhatsAppStatus.DISCONNECTED || status === WhatsAppStatus.CLOSE) return 'secondary';
   return 'outline';
 }
 
 function statusLabel(status: string): string {
-  if (status === 'connected' || status === 'open') return 'conectado';
-  if (status === 'connecting') return 'conectando…';
-  if (status === 'disconnected' || status === 'close') return 'desconectado';
+  if (status === WhatsAppStatus.CONNECTED || status === WhatsAppStatus.OPEN) return 'conectado';
+  if (status === WhatsAppStatus.CONNECTING) return 'conectando…';
+  if (status === WhatsAppStatus.DISCONNECTED || status === WhatsAppStatus.CLOSE) return 'desconectado';
   return status;
 }
 
@@ -53,7 +58,7 @@ function QrDialog({ accountId }: { accountId: string }) {
   const connect = useConnectWhatsApp();
   const { data: statusData } = useWhatsAppStatus(accountId, open);
 
-  const isConnected = statusData?.status === 'open' || statusData?.status === 'connected';
+  const isConnected = statusData?.status === WhatsAppStatus.OPEN || statusData?.status === WhatsAppStatus.CONNECTED;
   const qrCode = connect.data?.qrCode ?? null;
 
   function handleOpen(value: boolean) {
@@ -127,6 +132,10 @@ export default function WhatsAppPage() {
 
   async function handleCreate() {
     setError('');
+    if (!isValidPhone(phone)) {
+      setError('Número inválido. Use o formato internacional: +5511999999999');
+      return;
+    }
     try {
       JSON.parse(configJson);
     } catch {
@@ -222,7 +231,7 @@ export default function WhatsAppPage() {
               <p className="text-xs text-muted-foreground mt-1">
                 {new Date(acc.createdAt).toLocaleDateString('pt-BR')}
               </p>
-              {acc.provider === 'evolution' && acc.status !== 'connected' && acc.status !== 'open' && (
+              {acc.provider === WhatsAppProvider.EVOLUTION && acc.status !== WhatsAppStatus.CONNECTED && acc.status !== WhatsAppStatus.OPEN && (
                 <div className="mt-3">
                   <QrDialog accountId={acc.id} />
                 </div>

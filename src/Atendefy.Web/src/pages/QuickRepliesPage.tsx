@@ -85,6 +85,7 @@ export default function QuickRepliesPage() {
             value={newBody}
             onChange={(e) => setNewBody(e.target.value)}
             rows={3}
+            maxLength={1000}
           />
           <div className="flex gap-2">
             <Button
@@ -135,6 +136,7 @@ export default function QuickRepliesPage() {
                   value={editBody}
                   onChange={(e) => setEditBody(e.target.value)}
                   rows={3}
+                  maxLength={1000}
                   onKeyDown={(e) => {
                     if (e.key === 'Escape') cancelEdit();
                   }}

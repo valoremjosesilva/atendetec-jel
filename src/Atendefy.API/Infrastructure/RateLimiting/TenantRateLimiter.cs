@@ -4,10 +4,10 @@ namespace Atendefy.API.Infrastructure.RateLimiting;
 
 public class TenantRateLimiter(RedisService redis, int limit = 60)
 {
-    public async Task<bool> IsAllowedAsync(string tenantId)
+    public async Task<bool> IsAllowedAsync(string tenantId, string scope = "msg")
     {
         var minute = DateTime.UtcNow.ToString("yyyyMMddHHmm");
-        var key = $"ratelimit:{tenantId}:{minute}";
+        var key = $"ratelimit:{scope}:{tenantId}:{minute}";
 
         await redis.IncrementAsync(key);
         var count = await redis.GetCounterAsync(key);

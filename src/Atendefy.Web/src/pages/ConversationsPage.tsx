@@ -48,29 +48,44 @@ export default function ConversationsPage() {
   useEffect(() => {
     const token = useAuthStore.getState().accessToken;
     if (!token) return;
+    const safeToken: string = token;
 
-    const url = `/api/conversations/stream?token=${encodeURIComponent(token)}`;
-    const es = new EventSource(url);
-    let failures = 0;
+    let es: EventSource | null = null;
+    let retryTimeout: ReturnType<typeof setTimeout> | null = null;
+    let retries = 0;
+    let destroyed = false;
 
-    es.onmessage = (e) => {
-      try {
-        const { conversationId } = JSON.parse(e.data) as { conversationId: string };
-        queryClient.invalidateQueries({ queryKey: ['conversations'] });
-        queryClient.invalidateQueries({ queryKey: ['conversations', conversationId, 'messages'] });
-        queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
-        failures = 0;
-      } catch {
-        console.warn('[SSE] malformed event data:', e.data);
-      }
+    function connect() {
+      if (destroyed) return;
+      const url = `/api/conversations/stream?token=${encodeURIComponent(safeToken)}`;
+      es = new EventSource(url);
+
+      es.onmessage = (e) => {
+        retries = 0;
+        try {
+          const { conversationId } = JSON.parse(e.data) as { conversationId: string };
+          queryClient.invalidateQueries({ queryKey: ['conversations'] });
+          queryClient.invalidateQueries({ queryKey: ['conversations', conversationId, 'messages'] });
+          queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+        } catch { /* malformed event, ignore */ }
+      };
+
+      es.onerror = () => {
+        es?.close();
+        if (destroyed) return;
+        retries++;
+        const delay = Math.min(1000 * 2 ** retries, 30_000);
+        retryTimeout = setTimeout(connect, delay);
+      };
+    }
+
+    connect();
+
+    return () => {
+      destroyed = true;
+      es?.close();
+      if (retryTimeout) clearTimeout(retryTimeout);
     };
-
-    es.onerror = () => {
-      failures++;
-      if (failures >= 5) { es.close(); return; }
-    };
-
-    return () => es.close();
   }, [queryClient]);
 
   useEffect(() => {

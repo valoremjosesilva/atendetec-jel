@@ -4,10 +4,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useDashboardStats } from '@/hooks/useDashboard';
+import { WhatsAppStatus } from '@/lib/constants';
 
 export default function DashboardPage() {
   const { data: stats, isLoading, isError } = useDashboardStats();
-  const waConnected = stats?.whatsAppStatus === 'open';
+  const waConnected =
+    stats?.whatsAppStatus === WhatsAppStatus.OPEN ||
+    stats?.whatsAppStatus === WhatsAppStatus.CONNECTED;
 
   return (
     <div className="space-y-6">

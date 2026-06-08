@@ -1,4 +1,5 @@
 using Atendefy.API.Infrastructure.Database;
+using Atendefy.API.Infrastructure.RateLimiting;
 using Atendefy.API.Modules.Chatbot.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -57,7 +58,7 @@ public static class QuickReplyEndpoints
 
             return Results.Created($"/quick-replies/{quickReply.Id}",
                 new { quickReply.Id, quickReply.Title, quickReply.Body, quickReply.CreatedAt });
-        });
+        }).AddEndpointFilter<ApiRateLimitFilter>();
 
         group.MapPatch("/{id:guid}", async (
             Guid id,
@@ -80,7 +81,7 @@ public static class QuickReplyEndpoints
 
             await db.SaveChangesAsync();
             return Results.Ok(new { quickReply.Id, quickReply.Title, quickReply.Body });
-        });
+        }).AddEndpointFilter<ApiRateLimitFilter>();
 
         group.MapDelete("/{id:guid}", async (
             Guid id,
@@ -98,7 +99,7 @@ public static class QuickReplyEndpoints
             db.QuickReplies.Remove(quickReply);
             await db.SaveChangesAsync();
             return Results.NoContent();
-        });
+        }).AddEndpointFilter<ApiRateLimitFilter>();
 
         return app;
     }

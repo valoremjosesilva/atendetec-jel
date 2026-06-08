@@ -2,6 +2,7 @@ using Atendefy.API.Infrastructure.Database;
 using Atendefy.API.Modules.Auth.Models;
 using Atendefy.API.SharedKernel;
 using Microsoft.EntityFrameworkCore;
+using static Atendefy.API.SharedKernel.AppConstants;
 
 namespace Atendefy.API.Modules.Auth;
 
@@ -17,7 +18,7 @@ public class AuthService(PublicDbContext db, JwtService jwtService)
 
         var tenant = await db.Tenants
             .FirstOrDefaultAsync(t => t.Subdomain == tenantIdentifier
-                                   && t.Status == "active");
+                                   && t.Status == TenantStatus.Active);
 
         if (tenant is null)
             return Result<AuthResponse>.Fail("Tenant não encontrado");

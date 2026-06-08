@@ -1,4 +1,5 @@
 using Atendefy.API.Infrastructure.Database;
+using Atendefy.API.Infrastructure.RateLimiting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -27,24 +28,37 @@ public static class ContactEndpoints
 
             await using var db = dbFactory.Create(schemaName);
 
-            var contacts = await db.Contacts
+            var pagedContacts = await db.Contacts
                 .OrderBy(c => c.Phone)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
-                .Select(c => new
-                {
-                    c.Phone,
-                    c.Name,
-                    c.CreatedAt,
-                    ConversationCount = db.Conversations.Count(cv => cv.ContactPhone == c.Phone),
-                    LastActivity = db.Conversations
-                        .Where(cv => cv.ContactPhone == c.Phone)
-                        .SelectMany(cv => cv.Messages)
-                        .Max(m => (DateTime?)m.CreatedAt)
-                })
                 .ToListAsync();
 
             var total = await db.Contacts.CountAsync();
+
+            var phones = pagedContacts.Select(c => c.Phone).ToList();
+
+            var convCounts = await db.Conversations
+                .Where(cv => phones.Contains(cv.ContactPhone))
+                .GroupBy(cv => cv.ContactPhone)
+                .Select(g => new { Phone = g.Key, Count = g.Count() })
+                .ToDictionaryAsync(x => x.Phone, x => x.Count);
+
+            var lastActivities = await db.Conversations
+                .Where(cv => phones.Contains(cv.ContactPhone))
+                .SelectMany(cv => cv.Messages.Select(m => new { cv.ContactPhone, m.CreatedAt }))
+                .GroupBy(x => x.ContactPhone)
+                .Select(g => new { Phone = g.Key, LastActivity = g.Max(x => x.CreatedAt) })
+                .ToDictionaryAsync(x => x.Phone, x => (DateTime?)x.LastActivity);
+
+            var contacts = pagedContacts.Select(c => new
+            {
+                c.Phone,
+                c.Name,
+                c.CreatedAt,
+                ConversationCount = convCounts.GetValueOrDefault(c.Phone),
+                LastActivity = lastActivities.GetValueOrDefault(c.Phone),
+            });
 
             return Results.Ok(new { contacts, total, page, pageSize });
         });
@@ -66,7 +80,7 @@ public static class ContactEndpoints
             contact.Name = request.Name?.Trim();
             await db.SaveChangesAsync();
             return Results.Ok(new { contact.Phone, contact.Name });
-        });
+        }).AddEndpointFilter<ApiRateLimitFilter>();
 
         return app;
     }

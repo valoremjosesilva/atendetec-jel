@@ -1,7 +1,9 @@
 using Atendefy.API.Infrastructure.Database;
+using Atendefy.API.Infrastructure.RateLimiting;
 using Atendefy.API.Modules.Chatbot.Models;
 using Atendefy.API.Modules.WhatsApp;
 using Atendefy.API.Modules.WhatsApp.Models;
+using Atendefy.API.SharedKernel;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
@@ -35,9 +37,9 @@ public static class ConversationEndpoints
 
             var query = db.Conversations.AsQueryable();
             var statusFilter = status?.ToLowerInvariant();
-            if (statusFilter == "resolved")
+            if (statusFilter == AppConstants.ConversationStatus.Resolved)
                 query = query.Where(c => c.IsResolved);
-            else if (statusFilter != "all")
+            else if (statusFilter != AppConstants.ConversationStatus.All)
                 query = query.Where(c => !c.IsResolved);
 
             var total = await query.CountAsync();
@@ -111,7 +113,7 @@ public static class ConversationEndpoints
             conversation.BotPaused = true;
             await db.SaveChangesAsync();
             return Results.Ok(new { conversation.Id, conversation.BotPaused });
-        });
+        }).AddEndpointFilter<ApiRateLimitFilter>();
 
         group.MapPatch("/{id:guid}/release", async (
             Guid id,
@@ -129,7 +131,7 @@ public static class ConversationEndpoints
             conversation.BotPaused = false;
             await db.SaveChangesAsync();
             return Results.Ok(new { conversation.Id, conversation.BotPaused });
-        });
+        }).AddEndpointFilter<ApiRateLimitFilter>();
 
         group.MapPatch("/{id:guid}/resolve", async (
             Guid id,
@@ -148,7 +150,7 @@ public static class ConversationEndpoints
             conversation.ResolvedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
             return Results.Ok(new { conversation.Id, conversation.IsResolved, conversation.ResolvedAt });
-        });
+        }).AddEndpointFilter<ApiRateLimitFilter>();
 
         group.MapPatch("/{id:guid}/reopen", async (
             Guid id,
@@ -167,7 +169,7 @@ public static class ConversationEndpoints
             conversation.ResolvedAt = null;
             await db.SaveChangesAsync();
             return Results.Ok(new { conversation.Id, conversation.IsResolved });
-        });
+        }).AddEndpointFilter<ApiRateLimitFilter>();
 
         group.MapPost("/{id:guid}/messages", async (
             Guid id,
@@ -198,7 +200,7 @@ public static class ConversationEndpoints
             var message = new ConversationMessage
             {
                 ConversationId = id,
-                Role = "agent",
+                Role = AppConstants.MessageRole.Agent,
                 Content = request.Text
             };
             db.Messages.Add(message);
@@ -219,7 +221,7 @@ public static class ConversationEndpoints
             }
 
             return Results.Ok(new { message.Id, message.Role, message.Content, message.CreatedAt });
-        });
+        }).AddEndpointFilter<ApiRateLimitFilter>();
 
         group.MapGet("/stream", async (
             HttpContext ctx,

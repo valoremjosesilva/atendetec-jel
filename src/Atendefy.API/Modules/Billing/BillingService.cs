@@ -8,8 +8,8 @@ namespace Atendefy.API.Modules.Billing;
 
 public class BillingService(PublicDbContext db, IBillingGatewayFactory gatewayFactory)
 {
-    private static readonly HashSet<string> ValidProviders = ["asaas", "stripe"];
-    private static readonly HashSet<string> ValidCycles = ["monthly", "yearly"];
+    private static readonly HashSet<string> ValidProviders = [AppConstants.BillingProvider.Asaas, AppConstants.BillingProvider.Stripe];
+    private static readonly HashSet<string> ValidCycles = [AppConstants.BillingCycle.Monthly, AppConstants.BillingCycle.Yearly];
 
     public async Task<Result<Invoice>> SubscribeAsync(
         Guid tenantId, string tenantName, string email, CreateSubscriptionRequest request)
@@ -25,9 +25,9 @@ public class BillingService(PublicDbContext db, IBillingGatewayFactory gatewayFa
         var gateway = gatewayFactory.Create(request.Provider);
         var customerId = await gateway.CreateCustomerAsync(tenantName, email, request.CpfCnpj ?? string.Empty);
 
-        var amount = request.BillingCycle == "yearly" ? plan.PriceYearly : plan.PriceMonthly;
+        var amount = request.BillingCycle == AppConstants.BillingCycle.Yearly ? plan.PriceYearly : plan.PriceMonthly;
         var dueDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(3));
-        var description = $"{plan.Name} - {(request.BillingCycle == "yearly" ? "Anual" : "Mensal")}";
+        var description = $"{plan.Name} - {(request.BillingCycle == AppConstants.BillingCycle.Yearly ? "Anual" : "Mensal")}";
 
         var charge = await gateway.CreateChargeAsync(new CreateChargeArgs(
             customerId, amount, request.BillingType, description, dueDate, request.PaymentMethodId));
@@ -37,13 +37,13 @@ public class BillingService(PublicDbContext db, IBillingGatewayFactory gatewayFa
         {
             TenantId = tenantId,
             PlanId = plan.Id,
-            Status = "pending",
+            Status = AppConstants.SubscriptionStatus.Pending,
             BillingCycle = request.BillingCycle,
             Provider = request.Provider,
             ExternalCustomerId = customerId,
             ExternalId = charge.ExternalId,
             CurrentPeriodStart = now,
-            CurrentPeriodEnd = request.BillingCycle == "yearly" ? now.AddYears(1) : now.AddMonths(1)
+            CurrentPeriodEnd = request.BillingCycle == AppConstants.BillingCycle.Yearly ? now.AddYears(1) : now.AddMonths(1)
         };
         db.Subscriptions.Add(subscription);
         await db.SaveChangesAsync();
@@ -53,7 +53,7 @@ public class BillingService(PublicDbContext db, IBillingGatewayFactory gatewayFa
             SubscriptionId = subscription.Id,
             TenantId = tenantId,
             Amount = amount,
-            Status = "pending",
+            Status = AppConstants.InvoiceStatus.Pending,
             Provider = request.Provider,
             BillingType = request.BillingType,
             ExternalId = charge.ExternalId,
@@ -80,27 +80,27 @@ public class BillingService(PublicDbContext db, IBillingGatewayFactory gatewayFa
 
         if (evt.IsPaid)
         {
-            invoice.Status = "paid";
+            invoice.Status = AppConstants.InvoiceStatus.Paid;
             invoice.PaidAt = DateTime.UtcNow;
-            subscription.Status = "active";
+            subscription.Status = AppConstants.SubscriptionStatus.Active;
 
             var tenant = await db.Tenants.FindAsync(subscription.TenantId);
             if (tenant is not null)
             {
                 tenant.PlanId = subscription.PlanId;
-                tenant.Status = "active";
+                tenant.Status = AppConstants.TenantStatus.Active;
                 tenant.UpdatedAt = DateTime.UtcNow;
             }
         }
         else if (evt.IsOverdue)
         {
-            invoice.Status = "overdue";
-            subscription.Status = "past_due";
+            invoice.Status = AppConstants.InvoiceStatus.Overdue;
+            subscription.Status = AppConstants.SubscriptionStatus.PastDue;
         }
         else if (evt.IsCancelled)
         {
-            invoice.Status = "cancelled";
-            subscription.Status = "cancelled";
+            invoice.Status = AppConstants.InvoiceStatus.Cancelled;
+            subscription.Status = AppConstants.SubscriptionStatus.Cancelled;
         }
 
         invoice.UpdatedAt = DateTime.UtcNow;
@@ -111,7 +111,7 @@ public class BillingService(PublicDbContext db, IBillingGatewayFactory gatewayFa
     public async Task<Result> CancelAsync(Guid tenantId)
     {
         var subscription = await db.Subscriptions
-            .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.Status != "cancelled");
+            .FirstOrDefaultAsync(s => s.TenantId == tenantId && s.Status != AppConstants.SubscriptionStatus.Cancelled);
         if (subscription is null) return Result.Fail("Assinatura ativa não encontrada.");
 
         if (!string.IsNullOrEmpty(subscription.ExternalId))
@@ -120,7 +120,7 @@ public class BillingService(PublicDbContext db, IBillingGatewayFactory gatewayFa
             await gateway.CancelChargeAsync(subscription.ExternalId);
         }
 
-        subscription.Status = "cancelled";
+        subscription.Status = AppConstants.SubscriptionStatus.Cancelled;
         subscription.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
         return Result.Ok();

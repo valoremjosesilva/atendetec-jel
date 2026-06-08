@@ -7,3 +7,4 @@ logs/
 *.log
 .vs/
 /SECRET_GITUHUB.txt
+/docs/superpowers
