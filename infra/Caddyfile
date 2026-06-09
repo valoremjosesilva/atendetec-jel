@@ -3,9 +3,7 @@ api.{$DOMAIN} {
 }
 
 app.{$DOMAIN} {
-    root * /srv/web
-    file_server
-    try_files {path} /index.html
+    reverse_proxy atendefy-web:80
 }
 
 evolution.{$DOMAIN} {
