@@ -40,3 +40,11 @@ services:
       - DATABASE_CONNECTION_URI=postgresql://atendefy:change_me_strong_password@postgres:5432/evolution
       - CACHE_REDIS_ENABLED=false
       - CACHE_LOCAL_ENABLED=true
+      # WhatsApp Web version Baileys advertises. The image default (2.3000.1015901307)
+      # is outdated and WhatsApp now closes the socket before a QR is emitted, so the
+      # instance crash-loops and /instance/connect returns {count:0}. Keep this current
+      # (see https://raw.githubusercontent.com/WhiskeySockets/Baileys/master/src/Defaults/baileys-version.json).
+      - CONFIG_SESSION_PHONE_VERSION=2.3000.1035194821
+    depends_on:
+      postgres:
+        condition: service_healthy
