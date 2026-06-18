@@ -91,9 +91,11 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            cd /opt/atendefy || exit 1
-            export API_VERSION=${{ github.ref_name }}
-            export WEB_VERSION=${{ github.ref_name }}
+            set -euo pipefail
+            cd /opt/atendefy
+            TAG=${{ github.ref_name }}
+            export API_VERSION=${TAG#v}
+            export WEB_VERSION=${TAG#v}
             export API_IMAGE=ghcr.io/${{ github.repository }}/api
             export WEB_IMAGE=ghcr.io/${{ github.repository }}/web
             docker compose pull atendefy-api atendefy-web
