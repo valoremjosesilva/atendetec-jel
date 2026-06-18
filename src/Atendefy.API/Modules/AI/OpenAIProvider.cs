@@ -4,7 +4,10 @@ using System.Text.Json;
 
 namespace Atendefy.API.Modules.AI;
 
-public class OpenAIProvider(HttpClient httpClient, string apiKey) : IAIProvider
+public class OpenAIProvider(
+    HttpClient httpClient,
+    string apiKey,
+    string baseUrl = "https://api.openai.com/v1/chat/completions") : IAIProvider
 {
     public async Task<AICompletionResult> CompleteAsync(AICompletionRequest request)
     {
@@ -24,8 +27,7 @@ public class OpenAIProvider(HttpClient httpClient, string apiKey) : IAIProvider
             max_tokens = request.MaxTokens
         };
 
-        var response = await httpClient.PostAsJsonAsync(
-            "https://api.openai.com/v1/chat/completions", payload);
+        var response = await httpClient.PostAsJsonAsync(baseUrl, payload);
         response.EnsureSuccessStatusCode();
 
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();

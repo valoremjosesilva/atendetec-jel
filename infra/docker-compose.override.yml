@@ -16,6 +16,11 @@ services:
       - ASPNETCORE_URLS=http://+:8080
       - Evolution__BaseUrl=http://evolution-api:8080
       - Evolution__ApiKey=dev_evolution_key
+      # Provider "openai" aponta para qualquer API compatível com OpenAI.
+      # Default = Gemini (free tier). Para usar a OpenAI/Groq/OpenRouter, defina
+      # AI_OPENAI_BASE_URL no .env. A API key NÃO fica aqui — é cadastrada no
+      # painel de IA do app (Provider: openai, Model: gemini-2.0-flash).
+      - AI__OpenAiBaseUrl=${AI_OPENAI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai/chat/completions}
     ports:
       - "8084:8080"
     volumes:

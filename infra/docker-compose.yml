@@ -28,6 +28,10 @@ services:
       - App__BaseDomain=${DOMAIN}
       - Evolution__BaseUrl=http://evolution-api:8080
       - Evolution__ApiKey=${EVOLUTION_API_KEY}
+      # Provider "openai" aponta para qualquer API compatível com OpenAI.
+      # Default = Gemini (free tier); sobrescreva com AI_OPENAI_BASE_URL no .env.
+      # A API key é cadastrada no painel de IA do app, não aqui.
+      - AI__OpenAiBaseUrl=${AI_OPENAI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai/chat/completions}
     depends_on:
       postgres:
         condition: service_healthy

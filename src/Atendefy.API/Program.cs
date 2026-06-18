@@ -104,8 +104,13 @@ builder.Services.AddSingleton(new Atendefy.API.Modules.WhatsApp.Models.Evolution
 builder.Services.AddScoped<WhatsAppAccountService>();
 
 // AI
+// Permite apontar o provider "openai" para qualquer API compatível com OpenAI
+// (Gemini via endpoint OpenAI, Groq, OpenRouter, etc.) sem mexer no código.
+var openAiBaseUrl = builder.Configuration["AI:OpenAiBaseUrl"]
+    ?? "https://api.openai.com/v1/chat/completions";
 builder.Services.AddHttpClient("ai");
-builder.Services.AddSingleton<AIProviderFactory>();
+builder.Services.AddSingleton(sp => new AIProviderFactory(
+    sp.GetRequiredService<IHttpClientFactory>(), openAiBaseUrl));
 builder.Services.AddScoped(sp =>
     new AiConfigService(sp.GetRequiredService<TenantDbContextFactory>(), encryptionKey));
 
