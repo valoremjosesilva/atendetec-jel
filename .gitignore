@@ -8,3 +8,10 @@ logs/
 .vs/
 /SECRET_GITUHUB.txt
 /docs/superpowers
+
+# Chaves SSH — nunca versionar credenciais
+*.key
+*.key.pub
+*.pem
+id_rsa
+id_ed25519
