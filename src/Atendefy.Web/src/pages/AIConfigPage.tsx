@@ -19,8 +19,18 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 
+// O provider "openai" cobre qualquer API compatível com o formato da OpenAI.
+// A URL base é definida no backend por AI__OpenAiBaseUrl (default = Gemini).
+// Por isso os modelos Gemini (free) e Groq (free) ficam listados aqui junto.
 const MODELS: Record<string, string[]> = {
-  openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'],
+  openai: [
+    'gemini-2.0-flash',
+    'gemini-2.5-flash',
+    'llama-3.3-70b-versatile',
+    'gpt-4o',
+    'gpt-4o-mini',
+    'gpt-4-turbo',
+  ],
   anthropic: ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
   mock: ['mock'],
 };
