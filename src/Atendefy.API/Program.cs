@@ -39,6 +39,7 @@ var encryptionKey = builder.Configuration["Encryption:Key"]!;
 var metaAppSecret = builder.Configuration["Meta:AppSecret"] ?? string.Empty;
 var evolutionBaseUrl = builder.Configuration["Evolution:BaseUrl"] ?? "http://evolution-api:8080";
 var evolutionApiKey  = builder.Configuration["Evolution:ApiKey"] ?? string.Empty;
+var evolutionCallbackUrl = builder.Configuration["Evolution:CallbackUrl"] ?? "http://atendefy-api:8080";
 var rateLimit     = builder.Configuration.GetValue<int>("RateLimit:MessagesPerMinute", 60);
 var asaasKey      = builder.Configuration["Asaas:ApiKey"] ?? string.Empty;
 var asaasWebhook  = builder.Configuration["Asaas:WebhookToken"] ?? string.Empty;
@@ -99,7 +100,7 @@ builder.Services.AddProblemDetails();
 builder.Services.AddHttpClient("whatsapp");
 builder.Services.AddSingleton<WhatsAppProviderFactory>();
 builder.Services.AddSingleton(new Atendefy.API.Modules.WhatsApp.Models.EvolutionServerConfig(
-    evolutionBaseUrl, evolutionApiKey));
+    evolutionBaseUrl, evolutionApiKey, evolutionCallbackUrl));
 builder.Services.AddScoped<WhatsAppAccountService>();
 
 // AI

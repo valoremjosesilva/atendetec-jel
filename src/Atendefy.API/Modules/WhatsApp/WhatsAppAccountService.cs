@@ -3,6 +3,7 @@ using Atendefy.API.Modules.Webhooks.Models;
 using Atendefy.API.Modules.WhatsApp.Models;
 using Atendefy.API.SharedKernel;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using System.Net.Http.Json;
 using System.Text.Json;
 
@@ -12,7 +13,8 @@ public class WhatsAppAccountService(
     PublicDbContext publicDb,
     TenantDbContextFactory tenantDbFactory,
     IHttpClientFactory httpClientFactory,
-    EvolutionServerConfig evolutionServer)
+    EvolutionServerConfig evolutionServer,
+    ILogger<WhatsAppAccountService> logger)
 {
     private static readonly HashSet<string> ValidProviders = ["meta", "evolution"];
 
@@ -112,6 +114,10 @@ public class WhatsAppAccountService(
         if (!connectResp.IsSuccessStatusCode)
             return Result<WhatsAppConnectResult>.Fail("Falha ao obter QR code da Evolution API.");
 
+        // Garante que o Evolution entregue as mensagens recebidas no nosso webhook
+        // (idempotente: pode ser chamado a cada connect). Best-effort: não bloqueia o QR.
+        await TrySetWebhookAsync(client, baseUrl, cfg.Instance);
+
         var connectJson = await connectResp.Content.ReadFromJsonAsync<JsonElement>();
         if (!connectJson.TryGetProperty("base64", out var base64El))
             return Result<WhatsAppConnectResult>.Fail("Falha ao obter QR code da Evolution API.");
@@ -160,6 +166,34 @@ public class WhatsAppAccountService(
         client.DefaultRequestHeaders.Remove("apikey");
         client.DefaultRequestHeaders.Add("apikey", apiKey);
         return client;
+    }
+
+    private async Task TrySetWebhookAsync(HttpClient client, string baseUrl, string instance)
+    {
+        try
+        {
+            // O Evolution chama essa URL (interna, container→container) com o token = instance,
+            // que o roteador de webhook usa para achar o tenant/conta.
+            var callbackUrl = $"{evolutionServer.CallbackUrl.TrimEnd('/')}/webhooks/evolution?token={instance}";
+            var payload = new
+            {
+                webhook = new
+                {
+                    enabled = true,
+                    url = callbackUrl,
+                    events = new[] { "MESSAGES_UPSERT" }
+                }
+            };
+
+            var resp = await client.PostAsJsonAsync($"{baseUrl}/webhook/set/{instance}", payload);
+            if (!resp.IsSuccessStatusCode)
+                logger.LogWarning("Falha ao configurar webhook Evolution para {Instance}: HTTP {Status}",
+                    instance, (int)resp.StatusCode);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Erro ao configurar webhook Evolution para {Instance}", instance);
+        }
     }
 
     private static string ExtractMetaPhoneNumberId(string configJson)
