@@ -11,7 +11,8 @@ namespace Atendefy.API.Modules.WhatsApp;
 public class WhatsAppAccountService(
     PublicDbContext publicDb,
     TenantDbContextFactory tenantDbFactory,
-    IHttpClientFactory httpClientFactory)
+    IHttpClientFactory httpClientFactory,
+    EvolutionServerConfig evolutionServer)
 {
     private static readonly HashSet<string> ValidProviders = ["meta", "evolution"];
 
@@ -21,7 +22,9 @@ public class WhatsAppAccountService(
         if (!ValidProviders.Contains(request.Provider))
             return Result<WhatsAppAccount>.Fail("Provider inválido. Use 'meta' ou 'evolution'.");
 
-        if (string.IsNullOrWhiteSpace(request.ConfigJson))
+        // Para evolution o config é montado pelo servidor (URL/chave conhecidas); só o meta exige
+        // credenciais do usuário.
+        if (request.Provider == "meta" && string.IsNullOrWhiteSpace(request.ConfigJson))
             return Result<WhatsAppAccount>.Fail("ConfigJson é obrigatório.");
 
         await using var db = tenantDbFactory.Create(schemaName);
@@ -30,16 +33,25 @@ public class WhatsAppAccountService(
         {
             Provider = request.Provider,
             Phone = request.Phone,
-            ConfigJson = request.ConfigJson,
+            ConfigJson = request.Provider == "meta" ? request.ConfigJson : null,
             Status = "disconnected"
         };
 
         db.WhatsAppAccounts.Add(account);
         await db.SaveChangesAsync();
 
+        if (request.Provider == "evolution")
+        {
+            // instance == account.Id ("N") para casar com a LookupKey usada no roteamento de webhook.
+            var cfg = new EvolutionConfig(
+                evolutionServer.BaseUrl, account.Id.ToString("N"), evolutionServer.ApiKey);
+            account.ConfigJson = cfg.ToJson();
+            await db.SaveChangesAsync();
+        }
+
         var lookupKey = request.Provider == "evolution"
             ? account.Id.ToString("N")
-            : ExtractMetaPhoneNumberId(request.ConfigJson);
+            : ExtractMetaPhoneNumberId(request.ConfigJson!);
 
         publicDb.WebhookRoutes.Add(new WebhookRoute
         {

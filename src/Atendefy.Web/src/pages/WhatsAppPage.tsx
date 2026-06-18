@@ -136,14 +136,21 @@ export default function WhatsAppPage() {
       setError('Número inválido. Use o formato internacional: +5511999999999');
       return;
     }
-    try {
-      JSON.parse(configJson);
-    } catch {
-      setError('configJson inválido — verifique o JSON.');
-      return;
+    if (provider === 'meta') {
+      try {
+        JSON.parse(configJson);
+      } catch {
+        setError('configJson inválido — verifique o JSON.');
+        return;
+      }
     }
     try {
-      await createAccount.mutateAsync({ provider, phone, configJson });
+      // Evolution é configurado automaticamente pelo servidor; só o meta envia credenciais.
+      await createAccount.mutateAsync({
+        provider,
+        phone,
+        configJson: provider === 'evolution' ? '' : configJson,
+      });
       setOpen(false);
       setPhone('');
       setConfigJson(CONFIG_PLACEHOLDER[provider]);
@@ -190,16 +197,23 @@ export default function WhatsAppPage() {
                   placeholder="+5511999999999"
                 />
               </div>
-              <div className="space-y-1">
-                <Label htmlFor="configJson">Configuração (JSON)</Label>
-                <Textarea
-                  id="configJson"
-                  className="font-mono text-xs"
-                  rows={6}
-                  value={configJson}
-                  onChange={(e) => setConfigJson(e.target.value)}
-                />
-              </div>
+              {provider === 'meta' ? (
+                <div className="space-y-1">
+                  <Label htmlFor="configJson">Configuração (JSON)</Label>
+                  <Textarea
+                    id="configJson"
+                    className="font-mono text-xs"
+                    rows={6}
+                    value={configJson}
+                    onChange={(e) => setConfigJson(e.target.value)}
+                  />
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  A conexão com o WhatsApp será configurada automaticamente. Clique em{' '}
+                  <strong>Salvar</strong> e depois em <strong>Conectar</strong> para ler o QR code.
+                </p>
+              )}
               {error && <p className="text-sm text-destructive">{error}</p>}
               <Button
                 className="w-full"

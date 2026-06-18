@@ -26,6 +26,8 @@ services:
       - Jwt__Secret=${JWT_SECRET}
       - Encryption__Key=${ENCRYPTION_KEY}
       - App__BaseDomain=${DOMAIN}
+      - Evolution__BaseUrl=http://evolution-api:8080
+      - Evolution__ApiKey=${EVOLUTION_API_KEY}
     depends_on:
       postgres:
         condition: service_healthy
