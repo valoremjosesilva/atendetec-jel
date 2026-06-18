@@ -76,7 +76,7 @@ services:
       - atendefy
 
   evolution-api:
-    image: evoapicloud/evolution-api:2.4.0-rc2
+    image: atendai/evolution-api:latest
     profiles: [production]
     restart: unless-stopped
     environment:
