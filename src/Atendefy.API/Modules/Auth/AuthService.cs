@@ -30,16 +30,40 @@ public class AuthService(PublicDbContext db, JwtService jwtService)
         if (user is null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
             return Result<AuthResponse>.Fail("Email ou senha inválidos");
 
-        var accessToken = jwtService.GenerateAccessToken(user.Id, tenant.Id, user.Role, user.Email);
-        var refreshToken = jwtService.GenerateRefreshToken();
-
-        return Result<AuthResponse>.Ok(new AuthResponse(
-            AccessToken: accessToken,
-            RefreshToken: refreshToken,
-            ExpiresAt: DateTime.UtcNow.AddMinutes(15),
-            TenantId: tenant.Id.ToString(),
-            UserId: user.Id.ToString(),
-            Role: user.Role
-        ));
+        return Result<AuthResponse>.Ok(BuildAuthResponse(tenant.Id, user.Id, user.Role, user.Email));
     }
+
+    // Troca um refresh token válido por um novo par de tokens (access + refresh).
+    // O refresh token é autocontido (carrega tenant/usuário), então não precisa de X-Tenant-Key.
+    public async Task<Result<AuthResponse>> RefreshAsync(string refreshToken)
+    {
+        if (string.IsNullOrWhiteSpace(refreshToken))
+            return Result<AuthResponse>.Fail("Refresh token é obrigatório");
+
+        var principal = jwtService.ValidateRefreshToken(refreshToken);
+        if (principal is null)
+            return Result<AuthResponse>.Fail("Sessão expirada. Faça login novamente.");
+
+        var tenant = await db.Tenants
+            .FirstOrDefaultAsync(t => t.Id == principal.TenantId && t.Status == TenantStatus.Active);
+        if (tenant is null)
+            return Result<AuthResponse>.Fail("Tenant não encontrado");
+
+        var user = await db.TenantUsers
+            .FirstOrDefaultAsync(u => u.Id == principal.UserId && u.TenantId == tenant.Id);
+        if (user is null)
+            return Result<AuthResponse>.Fail("Usuário não encontrado");
+
+        return Result<AuthResponse>.Ok(BuildAuthResponse(tenant.Id, user.Id, user.Role, user.Email));
+    }
+
+    private AuthResponse BuildAuthResponse(Guid tenantId, Guid userId, string role, string email) =>
+        new(
+            AccessToken: jwtService.GenerateAccessToken(userId, tenantId, role, email),
+            RefreshToken: jwtService.GenerateRefreshToken(userId, tenantId, role, email),
+            ExpiresAt: DateTime.UtcNow.AddMinutes(15),
+            TenantId: tenantId.ToString(),
+            UserId: userId.ToString(),
+            Role: role
+        );
 }

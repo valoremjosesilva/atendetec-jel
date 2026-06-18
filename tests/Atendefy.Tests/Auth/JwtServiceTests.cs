@@ -16,11 +16,33 @@ public class JwtServiceTests
     }
 
     [Fact]
-    public void GenerateRefreshToken_ShouldReturn64ByteBase64String()
+    public void GenerateRefreshToken_ShouldRoundTripUserAndTenant()
     {
-        var token = _sut.GenerateRefreshToken();
-        var bytes = Convert.FromBase64String(token);
-        bytes.Length.Should().Be(64);
+        var userId = Guid.NewGuid();
+        var tenantId = Guid.NewGuid();
+
+        var token = _sut.GenerateRefreshToken(userId, tenantId, "Owner", "owner@test.com");
+        var principal = _sut.ValidateRefreshToken(token);
+
+        principal.Should().NotBeNull();
+        principal!.UserId.Should().Be(userId);
+        principal.TenantId.Should().Be(tenantId);
+    }
+
+    [Fact]
+    public void ValidateRefreshToken_WithAccessToken_ShouldReturnNull()
+    {
+        // An access token has a different audience and must not be accepted as a refresh token.
+        var accessToken = _sut.GenerateAccessToken(Guid.NewGuid(), Guid.NewGuid(), "Owner", "owner@test.com");
+        _sut.ValidateRefreshToken(accessToken).Should().BeNull();
+    }
+
+    [Fact]
+    public void ValidateToken_WithRefreshToken_ShouldReturnNull()
+    {
+        // Conversely, a refresh token must not pass access-token validation.
+        var refreshToken = _sut.GenerateRefreshToken(Guid.NewGuid(), Guid.NewGuid(), "Owner", "owner@test.com");
+        _sut.ValidateToken(refreshToken).Should().BeNull();
     }
 
     [Fact]

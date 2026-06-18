@@ -16,6 +16,7 @@ interface AuthState {
     role: string;
     subdomain: string;
   }) => void;
+  setTokens: (tokens: { accessToken: string; refreshToken: string }) => void;
   clear: () => void;
 }
 
@@ -29,6 +30,7 @@ export const useAuthStore = create<AuthState>()(
       role: null,
       subdomain: null,
       setAuth: (data) => set(data),
+      setTokens: (tokens) => set(tokens),
       clear: () =>
         set({
           accessToken: null,

@@ -25,6 +25,16 @@ public static class AuthEndpoints
                 : Results.Json(new { error = result.Error }, statusCode: 401);
         });
 
+        group.MapPost("/refresh", async (
+            [FromBody] RefreshRequest request,
+            AuthService authService) =>
+        {
+            var result = await authService.RefreshAsync(request.RefreshToken);
+            return result.IsSuccess
+                ? Results.Ok(result.Value)
+                : Results.Json(new { error = result.Error }, statusCode: 401);
+        });
+
         return app;
     }
 }
