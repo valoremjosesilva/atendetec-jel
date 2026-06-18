@@ -15,3 +15,8 @@ logs/
 *.pem
 id_rsa
 id_ed25519
+private-key-gc.txt
+.gitignore
+prompt-atendimento-jel.md
+.gitignore
+api-key-claude.md
