@@ -3,6 +3,8 @@ services:
     image: caddy:2-alpine
     profiles: [production]
     restart: unless-stopped
+    environment:
+      - DOMAIN=${DOMAIN}
     ports:
       - "80:80"
       - "443:443"
