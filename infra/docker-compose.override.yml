@@ -21,6 +21,9 @@ services:
       # AI_OPENAI_BASE_URL no .env. A API key NÃO fica aqui — é cadastrada no
       # painel de IA do app (Provider: openai, Model: gemini-2.0-flash).
       - AI__OpenAiBaseUrl=${AI_OPENAI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai/chat/completions}
+      # Meta WhatsApp Cloud API (só necessário se testar Meta local via túnel/ngrok).
+      - Meta__AppSecret=${META_APP_SECRET:-}
+      - Meta__WebhookVerifyToken=${META_WEBHOOK_VERIFY_TOKEN:-}
     ports:
       - "8084:8080"
     volumes:

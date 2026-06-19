@@ -32,6 +32,10 @@ services:
       # Default = Gemini (free tier); sobrescreva com AI_OPENAI_BASE_URL no .env.
       # A API key é cadastrada no painel de IA do app, não aqui.
       - AI__OpenAiBaseUrl=${AI_OPENAI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai/chat/completions}
+      # Meta WhatsApp Cloud API: App Secret (valida assinatura do webhook) e
+      # Verify Token (handshake GET do webhook). Defina ambos no .env da VM.
+      - Meta__AppSecret=${META_APP_SECRET:-}
+      - Meta__WebhookVerifyToken=${META_WEBHOOK_VERIFY_TOKEN:-}
     depends_on:
       postgres:
         condition: service_healthy
