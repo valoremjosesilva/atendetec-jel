@@ -30,7 +30,7 @@ function isValidPhone(phone: string): boolean {
 }
 
 const CONFIG_PLACEHOLDER: Record<Provider, string> = {
-  meta: JSON.stringify({ phoneNumberId: '1234567890', accessToken: 'EAAxxxxxxx' }, null, 2),
+  meta: JSON.stringify({ phone_number_id: '1234567890', access_token: 'EAAxxxxxxx' }, null, 2),
   evolution: JSON.stringify(
     { base_url: 'http://evolution-api:8080', instance: 'atendefy-dev', api_key: 'dev_evolution_key' },
     null,
@@ -137,10 +137,15 @@ export default function WhatsAppPage() {
       return;
     }
     if (provider === 'meta') {
+      let parsed: Record<string, unknown>;
       try {
-        JSON.parse(configJson);
+        parsed = JSON.parse(configJson);
       } catch {
         setError('configJson inválido — verifique o JSON.');
+        return;
+      }
+      if (!parsed.phone_number_id || !parsed.access_token) {
+        setError('O JSON deve conter "phone_number_id" e "access_token".');
         return;
       }
     }
