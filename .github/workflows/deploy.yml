@@ -82,8 +82,24 @@ jobs:
   deploy:
     needs: [build-push-api, build-push-web]
     runs-on: ubuntu-latest
-    permissions: {}
+    permissions:
+      contents: read
     steps:
+      - uses: actions/checkout@v4
+
+      # Mantém o docker-compose.yml da VM em sincronia com o repo (a VM não é git).
+      # Sem isso, mudanças no compose (novas envs etc.) nunca chegam à produção.
+      - name: Copy compose to VM
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: infra/docker-compose.yml
+          target: /opt/atendefy/
+          strip_components: 1
+          overwrite: true
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
         with:
@@ -94,8 +110,11 @@ jobs:
             set -e
             cd /opt/atendefy
             TAG=${{ github.ref_name }}
-            export API_VERSION=${TAG#v}
-            export WEB_VERSION=${TAG#v}
+            VERSION=${TAG#v}
+            # Persiste a versão no .env para que um `docker compose up` manual
+            # depois não regrida a imagem para :latest.
+            if grep -q '^API_VERSION=' .env; then sed -i "s/^API_VERSION=.*/API_VERSION=${VERSION}/" .env; else echo "API_VERSION=${VERSION}" >> .env; fi
+            if grep -q '^WEB_VERSION=' .env; then sed -i "s/^WEB_VERSION=.*/WEB_VERSION=${VERSION}/" .env; else echo "WEB_VERSION=${VERSION}" >> .env; fi
             export API_IMAGE=ghcr.io/${{ github.repository }}/api
             export WEB_IMAGE=ghcr.io/${{ github.repository }}/web
             docker compose pull atendefy-api atendefy-web
