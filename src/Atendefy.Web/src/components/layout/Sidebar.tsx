@@ -1,6 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import {
   Bot,
+  CalendarClock,
   CreditCard,
   LayoutDashboard,
   LogOut,
@@ -16,6 +17,7 @@ const navItems = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/whatsapp', label: 'WhatsApp', icon: Wifi },
   { to: '/ai-config', label: 'IA', icon: Bot },
+  { to: '/scheduling', label: 'Agenda', icon: CalendarClock },
   { to: '/conversations', label: 'Conversas', icon: MessageSquare },
   { to: '/contacts', label: 'Contatos', icon: Users },
   { to: '/quick-replies', label: 'Respostas Rápidas', icon: Zap },

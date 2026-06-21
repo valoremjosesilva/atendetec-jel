@@ -1,5 +1,6 @@
 using Atendefy.API.Modules.AI.Models;
 using Atendefy.API.Modules.Chatbot.Models;
+using Atendefy.API.Modules.Scheduling.Models;
 using Atendefy.API.Modules.WhatsApp.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,6 +11,7 @@ public class TenantDbContext(DbContextOptions<TenantDbContext> options, string s
     public string SchemaName => schema;
     public DbSet<WhatsAppAccount> WhatsAppAccounts => Set<WhatsAppAccount>();
     public DbSet<AiConfig> AiConfigs => Set<AiConfig>();
+    public DbSet<CalendarConfig> CalendarConfigs => Set<CalendarConfig>();
     public DbSet<Conversation> Conversations => Set<Conversation>();
     public DbSet<ConversationMessage> Messages => Set<ConversationMessage>();
     public DbSet<UsageCounter> UsageCounters => Set<UsageCounter>();
@@ -37,6 +39,13 @@ public class TenantDbContext(DbContextOptions<TenantDbContext> options, string s
             e.HasKey(x => x.Id);
             e.Property(x => x.Provider).HasMaxLength(50).IsRequired();
             e.Property(x => x.Model).HasMaxLength(100);
+        });
+
+        modelBuilder.Entity<CalendarConfig>(e =>
+        {
+            e.ToTable("calendar_configs");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Provider).HasMaxLength(50).IsRequired();
         });
 
         modelBuilder.Entity<Conversation>(e =>

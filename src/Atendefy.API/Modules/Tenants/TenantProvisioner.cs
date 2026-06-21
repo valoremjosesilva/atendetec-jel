@@ -35,6 +35,16 @@ public class TenantProvisioner(string connectionString) : ITenantProvisioner
                 updated_at TIMESTAMPTZ
             );
 
+            CREATE TABLE IF NOT EXISTS "{schemaName}".calendar_configs (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                provider VARCHAR(50) NOT NULL DEFAULT 'calcom',
+                booking_url TEXT,
+                enabled BOOLEAN DEFAULT FALSE,
+                instructions TEXT,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ
+            );
+
             CREATE TABLE IF NOT EXISTS "{schemaName}".conversations (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                 contact_phone VARCHAR(30) NOT NULL,

@@ -56,6 +56,21 @@ export interface AIConfigRequest {
   systemPrompt: string;
 }
 
+// Scheduling
+export interface SchedulingConfigResponse {
+  provider: string;
+  bookingUrl: string | null;
+  enabled: boolean;
+  instructions: string | null;
+}
+
+export interface SchedulingConfigRequest {
+  provider?: string;
+  bookingUrl: string;
+  enabled: boolean;
+  instructions?: string;
+}
+
 // Billing
 export interface Plan {
   id: string;

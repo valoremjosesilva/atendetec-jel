@@ -4,6 +4,7 @@ using Atendefy.API.Infrastructure.RateLimiting;
 using Atendefy.API.Modules.AI;
 using Atendefy.API.Modules.AI.Models;
 using Atendefy.API.Modules.Chatbot.Models;
+using Atendefy.API.Modules.Scheduling.Models;
 using Atendefy.API.Modules.WhatsApp;
 using Atendefy.API.Modules.WhatsApp.Models;
 using Atendefy.API.SharedKernel.Extensions;
@@ -115,20 +116,37 @@ public class ConversationWorker(
         var history = await conversationService.GetOrCreateSessionAsync(msg.TenantId, msg.ContactPhone);
         var contextMessages = ConversationService.BuildContextMessages(history, msg.MessageText);
 
+        // Agendamento (handoff por link): se a conta tem agenda ativa, injeta o link no system
+        // prompt para o bot oferecê-lo quando o cliente quiser marcar.
+        var systemPrompt = aiConfig.SystemPrompt ?? "Você é um assistente prestativo.";
+        // Defensivo: schemas de tenants antigos podem não ter a tabela calendar_configs ainda
+        // (criada por tenant no provisioner). Falha aqui => agendamento off, mensagem segue normal.
+        CalendarConfig? calendar = null;
+        try { calendar = await tenantDb.CalendarConfigs.FirstOrDefaultAsync(); }
+        catch (Exception ex) { logger.LogWarning(ex, "calendar_configs indisponível para {Schema} — agendamento desativado", msg.SchemaName); }
+        var schedulingOn = calendar is { Enabled: true } && !string.IsNullOrWhiteSpace(calendar.BookingUrl);
+        if (schedulingOn)
+            systemPrompt += BuildSchedulingInstruction(calendar!);
+
         var decryptedKey = AesEncryption.Decrypt(aiConfig.ApiKeyEncrypted!, encryptionKey);
         var aiProvider = aiFactory.Create(aiConfig.Provider, decryptedKey);
         var aiResult = await aiProvider.CompleteAsync(new AICompletionRequest(
-            SystemPrompt: aiConfig.SystemPrompt ?? "Você é um assistente prestativo.",
+            SystemPrompt: systemPrompt,
             Messages: contextMessages,
             Model: aiConfig.Model ?? "gpt-4o-mini"
         ));
 
-        contextMessages.Add(new("assistant", aiResult.Content));
+        // Rede de segurança: se o cliente pediu agendamento e o link não saiu na resposta, anexa.
+        var replyText = aiResult.Content;
+        if (schedulingOn && MentionsScheduling(msg.MessageText) && !replyText.Contains(calendar!.BookingUrl!))
+            replyText += $"\n\nPara agendar, acesse: {calendar.BookingUrl}";
+
+        contextMessages.Add(new("assistant", replyText));
         await conversationService.SaveSessionAsync(msg.TenantId, msg.ContactPhone, contextMessages);
 
         var conversationId = await ConversationService.PersistAsync(
             tenantDbFactory, msg.SchemaName, msg.ContactPhone,
-            msg.MessageText, aiResult.Content, aiResult.TokensUsed,
+            msg.MessageText, replyText, aiResult.TokensUsed,
             accountId);
 
         await UpsertContactAsync(msg.SchemaName, msg.ContactPhone);
@@ -142,13 +160,23 @@ public class ConversationWorker(
         try
         {
             var waProvider = whatsAppFactory.Create(waAccount.Provider, waAccount.ConfigJson);
-            await waProvider.SendMessageAsync(new OutboundMessage(msg.ContactPhone, aiResult.Content));
+            await waProvider.SendMessageAsync(new OutboundMessage(msg.ContactPhone, replyText));
         }
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Falha ao enviar resposta WhatsApp para {Phone} (conversa salva)", msg.ContactPhone);
         }
     }
+
+    private static string BuildSchedulingInstruction(CalendarConfig cal) =>
+        "\n\nAGENDAMENTO: quando o cliente quiser agendar, marcar, remarcar ou ver disponibilidade, " +
+        $"envie EXATAMENTE este link de agendamento: {cal.BookingUrl}" +
+        (string.IsNullOrWhiteSpace(cal.Instructions) ? "" : $"\n{cal.Instructions}");
+
+    private static bool MentionsScheduling(string text) =>
+        System.Text.RegularExpressions.Regex.IsMatch(
+            text, @"agend|hor[áa]rio|marcar|remarcar|consulta|disponibilidade|reservar",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     private async Task UpsertContactAsync(string schemaName, string phone)
     {

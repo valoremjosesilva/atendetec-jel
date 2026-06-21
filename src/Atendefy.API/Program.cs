@@ -8,6 +8,7 @@ using Atendefy.API.Modules.Auth;
 using Atendefy.API.Modules.Billing;
 using Atendefy.API.Modules.Billing.Gateways;
 using Atendefy.API.Modules.Chatbot;
+using Atendefy.API.Modules.Scheduling;
 using Atendefy.API.Modules.Tenants;
 using Atendefy.API.Modules.Webhooks;
 using Atendefy.API.Modules.WhatsApp;
@@ -114,6 +115,9 @@ builder.Services.AddSingleton(sp => new AIProviderFactory(
 builder.Services.AddScoped(sp =>
     new AiConfigService(sp.GetRequiredService<TenantDbContextFactory>(), encryptionKey));
 
+// Scheduling (agendamento via link — Cal.com/Calendly)
+builder.Services.AddScoped<SchedulingService>();
+
 // Webhooks
 builder.Services.AddSingleton(new MetaWebhookValidator(metaAppSecret));
 builder.Services.AddScoped<EvolutionWebhookValidator>();
@@ -191,6 +195,7 @@ app.MapAuthEndpoints();
 app.MapTenantEndpoints();
 app.MapWhatsAppEndpoints();
 app.MapAIEndpoints();
+app.MapSchedulingEndpoints();
 app.MapWebhookEndpoints();
 app.MapBillingEndpoints();
 app.MapBillingWebhookEndpoints();
