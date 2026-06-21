@@ -42,6 +42,45 @@ public class TenantServiceTests
     }
 
     [Fact]
+    public async Task Register_ShouldCreateTenantAsPending()
+    {
+        var db = CreateDb();
+        var sut = CreateService(db, Substitute.For<ITenantProvisioner>());
+
+        await sut.RegisterAsync(new RegisterTenantRequest(
+            "Nova Co", "nova-co", "Owner", "owner@nova.com", "P@ss123"));
+
+        var tenant = await db.Tenants.FirstAsync(t => t.Subdomain == "nova-co");
+        tenant.Status.Should().Be("pending");
+    }
+
+    [Fact]
+    public async Task Activate_ShouldFlipPendingToActive()
+    {
+        var db = CreateDb();
+        db.Tenants.Add(new Tenant { Name = "Co", Subdomain = "co", Status = "pending" });
+        await db.SaveChangesAsync();
+        var sut = CreateService(db, Substitute.For<ITenantProvisioner>());
+
+        var result = await sut.ActivateAsync("co");
+
+        result.IsSuccess.Should().BeTrue();
+        var tenant = await db.Tenants.FirstAsync(t => t.Subdomain == "co");
+        tenant.Status.Should().Be("active");
+    }
+
+    [Fact]
+    public async Task Activate_UnknownSubdomain_ShouldFail()
+    {
+        var db = CreateDb();
+        var sut = CreateService(db, Substitute.For<ITenantProvisioner>());
+
+        var result = await sut.ActivateAsync("nao-existe");
+
+        result.IsSuccess.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task Register_WithDuplicateSubdomain_ShouldFailWithMessage()
     {
         var db = CreateDb();

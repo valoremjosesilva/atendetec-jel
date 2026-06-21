@@ -3,6 +3,7 @@ using Atendefy.API.Modules.Tenants.Models;
 using Atendefy.API.SharedKernel;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using static Atendefy.API.SharedKernel.AppConstants;
 
 namespace Atendefy.API.Modules.Tenants;
 
@@ -28,7 +29,14 @@ public class TenantService(PublicDbContext db, ITenantProvisioner provisioner, I
         if (await db.Tenants.AnyAsync(t => t.Subdomain == subdomain))
             return Result<Tenant>.Fail($"O subdomínio '{subdomain}' já está em uso");
 
-        var tenant = new Tenant { Name = request.CompanyName, Subdomain = subdomain };
+        // Nasce "pending": o login exige Status == Active, então a empresa só entra
+        // após aprovação (ver ActivateAsync).
+        var tenant = new Tenant
+        {
+            Name = request.CompanyName,
+            Subdomain = subdomain,
+            Status = TenantStatus.Pending
+        };
         var owner = new TenantUser
         {
             TenantId = tenant.Id,
@@ -65,4 +73,26 @@ public class TenantService(PublicDbContext db, ITenantProvisioner provisioner, I
 
         return Result<Tenant>.Ok(tenant);
     }
+
+    public async Task<List<PendingTenant>> ListPendingAsync() =>
+        await db.Tenants
+            .Where(t => t.Status == TenantStatus.Pending)
+            .OrderBy(t => t.CreatedAt)
+            .Select(t => new PendingTenant(t.Id, t.Subdomain, t.Name, t.CreatedAt))
+            .ToListAsync();
+
+    public async Task<Result> ActivateAsync(string subdomain)
+    {
+        var key = subdomain.ToLowerInvariant().Trim();
+        var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.Subdomain == key);
+        if (tenant is null) return Result.Fail("Empresa não encontrada");
+        if (tenant.Status == TenantStatus.Active) return Result.Ok();
+
+        tenant.Status = TenantStatus.Active;
+        await db.SaveChangesAsync();
+        logger.LogInformation("Tenant {Subdomain} ({TenantId}) ativado", tenant.Subdomain, tenant.Id);
+        return Result.Ok();
+    }
 }
+
+public record PendingTenant(Guid Id, string Subdomain, string Name, DateTime CreatedAt);

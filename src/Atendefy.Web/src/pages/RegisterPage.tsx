@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { apiClient } from '@/api/client';
-import { useAuthStore } from '@/stores/authStore';
-import type { AuthResponse, RegisterRequest } from '@/types/api';
+import type { RegisterRequest } from '@/types/api';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -15,8 +14,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
 export default function RegisterPage() {
-  const navigate = useNavigate();
-  const setAuth = useAuthStore((s) => s.setAuth);
   const [form, setForm] = useState<RegisterRequest>({
     companyName: '',
     subdomain: '',
@@ -26,6 +23,7 @@ export default function RegisterPage() {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
   function update(field: keyof RegisterRequest, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -36,14 +34,9 @@ export default function RegisterPage() {
     setError('');
     setLoading(true);
     try {
+      // A empresa nasce "pendente": não logamos aqui; o acesso libera após aprovação.
       await apiClient.post('/tenants/register', form);
-      const { data } = await apiClient.post<AuthResponse>(
-        '/auth/login',
-        { email: form.ownerEmail, password: form.ownerPassword },
-        { headers: { 'X-Tenant-Key': form.subdomain } }
-      );
-      setAuth({ ...data, subdomain: form.subdomain });
-      navigate('/dashboard');
+      setSubmitted(true);
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
@@ -52,6 +45,25 @@ export default function RegisterPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (submitted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md text-center">
+          <CardHeader>
+            <CardTitle>Empresa cadastrada! 🎉</CardTitle>
+            <CardDescription>
+              Sua conta está <strong>em análise</strong>. Assim que for liberada, você poderá
+              entrar com o e-mail e a senha que cadastrou.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button className="w-full" render={<Link to="/login">Ir para o login</Link>} />
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return (
@@ -84,8 +96,8 @@ export default function RegisterPage() {
                 required
               />
               <p className="text-xs text-muted-foreground">
-                Seu acesso será em{' '}
-                <strong>{form.subdomain || '<subdomínio>'}.atendefy.com.br</strong>
+                Sua empresa será identificada por{' '}
+                <strong>{form.subdomain || '<subdomínio>'}</strong>
               </p>
             </div>
             <div className="space-y-1">

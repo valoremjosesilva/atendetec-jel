@@ -17,11 +17,15 @@ public class AuthService(PublicDbContext db, JwtService jwtService)
             return Result<AuthResponse>.Fail("Senha inválida");
 
         var tenant = await db.Tenants
-            .FirstOrDefaultAsync(t => t.Subdomain == tenantIdentifier
-                                   && t.Status == TenantStatus.Active);
+            .FirstOrDefaultAsync(t => t.Subdomain == tenantIdentifier);
 
         if (tenant is null)
             return Result<AuthResponse>.Fail("Tenant não encontrado");
+
+        if (tenant.Status != TenantStatus.Active)
+            return Result<AuthResponse>.Fail(tenant.Status == TenantStatus.Pending
+                ? "Sua empresa está em análise e ainda não foi liberada."
+                : "Acesso suspenso. Entre em contato com o suporte.");
 
         var user = await db.TenantUsers
             .FirstOrDefaultAsync(u => u.TenantId == tenant.Id

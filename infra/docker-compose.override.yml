@@ -24,6 +24,8 @@ services:
       # Meta WhatsApp Cloud API (só necessário se testar Meta local via túnel/ngrok).
       - Meta__AppSecret=${META_APP_SECRET:-}
       - Meta__WebhookVerifyToken=${META_WEBHOOK_VERIFY_TOKEN:-}
+      # Chave admin p/ aprovar empresas em dev (default fixo só pra ambiente local).
+      - Admin__Key=${ADMIN_KEY:-dev_admin_key}
     ports:
       - "8084:8080"
     volumes:

@@ -36,6 +36,9 @@ services:
       # Verify Token (handshake GET do webhook). Defina ambos no .env da VM.
       - Meta__AppSecret=${META_APP_SECRET:-}
       - Meta__WebhookVerifyToken=${META_WEBHOOK_VERIFY_TOKEN:-}
+      # Chave de admin p/ aprovar empresas (POST /tenants/{sub}/activate via header X-Admin-Key).
+      # Vazio = endpoints admin desativados. Defina ADMIN_KEY no .env da VM.
+      - Admin__Key=${ADMIN_KEY:-}
     depends_on:
       postgres:
         condition: service_healthy
