@@ -29,7 +29,7 @@ export default function Sidebar() {
   return (
     <aside className="w-56 flex flex-col h-full border-r bg-card">
       <div className="p-4 border-b">
-        <p className="font-bold text-lg">Atendefy</p>
+        <p className="font-bold text-lg">Mensagee</p>
         <p className="text-xs text-muted-foreground truncate">{subdomain}</p>
       </div>
       <nav className="flex-1 p-2 space-y-1">
