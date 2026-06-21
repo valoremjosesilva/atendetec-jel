@@ -123,6 +123,23 @@ export default function SchedulingPage() {
               />
             </div>
 
+            {config?.webhookUrl && (
+              <div className="space-y-1 rounded-md border border-dashed p-3">
+                <Label htmlFor="webhookUrl">URL do webhook (opcional — ver agendamentos no painel)</Label>
+                <Input
+                  id="webhookUrl"
+                  readOnly
+                  value={config.webhookUrl}
+                  onFocus={(e) => e.currentTarget.select()}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Cole esta URL em <strong>Cal.com → Settings → Webhooks</strong> (evento{' '}
+                  <strong>BOOKING_CREATED</strong>) para que os agendamentos confirmados apareçam no
+                  painel. Adicione também a pergunta de telefone no seu event type.
+                </p>
+              </div>
+            )}
+
             {success && <p className="text-sm text-green-600">Configuração salva com sucesso.</p>}
             {error && <p className="text-sm text-destructive">{error}</p>}
 

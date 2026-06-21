@@ -7,6 +7,8 @@ public class CalendarConfig
     public string? BookingUrl { get; set; }
     public bool Enabled { get; set; }
     public string? Instructions { get; set; }
+    // Token usado na URL do webhook do Cal.com (Fase 3 — write-back). Gerado ao ativar.
+    public string? WebhookToken { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }
 }

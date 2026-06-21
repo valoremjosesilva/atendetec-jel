@@ -62,6 +62,7 @@ export interface SchedulingConfigResponse {
   bookingUrl: string | null;
   enabled: boolean;
   instructions: string | null;
+  webhookUrl: string | null;
 }
 
 export interface SchedulingConfigRequest {

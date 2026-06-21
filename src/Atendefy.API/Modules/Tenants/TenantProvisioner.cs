@@ -41,9 +41,26 @@ public class TenantProvisioner(string connectionString) : ITenantProvisioner
                 booking_url TEXT,
                 enabled BOOLEAN DEFAULT FALSE,
                 instructions TEXT,
+                webhook_token TEXT,
                 created_at TIMESTAMPTZ DEFAULT NOW(),
                 updated_at TIMESTAMPTZ
             );
+
+            CREATE TABLE IF NOT EXISTS "{schemaName}".appointments (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                external_id VARCHAR(200) NOT NULL,
+                title TEXT,
+                start_time TIMESTAMPTZ,
+                end_time TIMESTAMPTZ,
+                attendee_name VARCHAR(200),
+                attendee_email VARCHAR(200),
+                attendee_phone VARCHAR(30),
+                status VARCHAR(30) DEFAULT 'confirmed',
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ
+            );
+            CREATE INDEX IF NOT EXISTS ix_appointments_external_id
+                ON "{schemaName}".appointments (external_id);
 
             CREATE TABLE IF NOT EXISTS "{schemaName}".conversations (
                 id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

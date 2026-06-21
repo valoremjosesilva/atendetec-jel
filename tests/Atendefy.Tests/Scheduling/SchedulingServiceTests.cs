@@ -64,4 +64,41 @@ public class SchedulingServiceTests
         cfg.Enabled.Should().BeFalse();
         cfg.Provider.Should().Be("calendly");
     }
+
+    [Fact]
+    public async Task Upsert_GeneratesWebhookToken_OnEnable_AndKeepsItStable()
+    {
+        var sut = Create();
+        var schema = NewSchema();
+
+        await sut.UpsertAsync(schema, new CalendarConfigRequest("https://cal.com/a", true, null, "calcom"));
+        var first = (await sut.GetAsync(schema))!.WebhookToken;
+        first.Should().NotBeNullOrEmpty();
+
+        // Salvar de novo não troca o token.
+        await sut.UpsertAsync(schema, new CalendarConfigRequest("https://cal.com/a", true, "x", "calcom"));
+        (await sut.GetAsync(schema))!.WebhookToken.Should().Be(first);
+    }
+
+    [Fact]
+    public async Task UpsertAppointment_IsIdempotentByExternalId()
+    {
+        var sut = Create();
+        var schema = NewSchema();
+
+        await sut.UpsertAppointmentAsync(schema, new Appointment
+        {
+            ExternalId = "uid1", Title = "Consulta", Status = "confirmed",
+            AttendeeName = "João"
+        });
+        await sut.UpsertAppointmentAsync(schema, new Appointment
+        {
+            ExternalId = "uid1", Title = "Consulta", Status = "cancelled"
+        });
+
+        var list = await sut.ListAppointmentsAsync(schema);
+        list.Should().HaveCount(1);
+        list[0].Status.Should().Be("cancelled");
+        list[0].AttendeeName.Should().Be("João");  // preservado (incoming null não sobrescreve)
+    }
 }

@@ -12,6 +12,7 @@ public class TenantDbContext(DbContextOptions<TenantDbContext> options, string s
     public DbSet<WhatsAppAccount> WhatsAppAccounts => Set<WhatsAppAccount>();
     public DbSet<AiConfig> AiConfigs => Set<AiConfig>();
     public DbSet<CalendarConfig> CalendarConfigs => Set<CalendarConfig>();
+    public DbSet<Appointment> Appointments => Set<Appointment>();
     public DbSet<Conversation> Conversations => Set<Conversation>();
     public DbSet<ConversationMessage> Messages => Set<ConversationMessage>();
     public DbSet<UsageCounter> UsageCounters => Set<UsageCounter>();
@@ -46,6 +47,15 @@ public class TenantDbContext(DbContextOptions<TenantDbContext> options, string s
             e.ToTable("calendar_configs");
             e.HasKey(x => x.Id);
             e.Property(x => x.Provider).HasMaxLength(50).IsRequired();
+        });
+
+        modelBuilder.Entity<Appointment>(e =>
+        {
+            e.ToTable("appointments");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.ExternalId).HasMaxLength(200).IsRequired();
+            e.HasIndex(x => x.ExternalId);
+            e.Property(x => x.Status).HasMaxLength(30);
         });
 
         modelBuilder.Entity<Conversation>(e =>

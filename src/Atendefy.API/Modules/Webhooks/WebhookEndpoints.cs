@@ -1,6 +1,8 @@
 using Atendefy.API.Infrastructure.Database;
 using Atendefy.API.Infrastructure.Messaging;
 using Atendefy.API.Modules.Chatbot.Models;
+using Atendefy.API.Modules.Scheduling;
+using Atendefy.API.Modules.Scheduling.Models;
 using Atendefy.API.Modules.Webhooks.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -108,6 +110,40 @@ public static class WebhookEndpoints
                 Provider: "evolution",
                 AccountId: route.AccountId.ToString()
             ));
+
+            return Results.Ok();
+        });
+
+        // Cal.com: write-back de agendamentos (Fase 3). Roteado por ?token= (webhook_routes).
+        group.MapPost("/calcom", async (
+            HttpContext ctx,
+            PublicDbContext publicDb,
+            SchedulingService scheduling,
+            ILoggerFactory loggerFactory,
+            [FromQuery] string? token) =>
+        {
+            var logger = loggerFactory.CreateLogger("CalcomWebhook");
+            if (string.IsNullOrEmpty(token)) return Results.Forbid();
+
+            var route = await publicDb.WebhookRoutes
+                .FirstOrDefaultAsync(r => r.Provider == "calcom" && r.LookupKey == token);
+            if (route is null) return Results.Forbid();
+
+            var tenant = await publicDb.Tenants.FindAsync(route.TenantId);
+            if (tenant is null) return Results.Ok();
+
+            try
+            {
+                using var doc = await JsonDocument.ParseAsync(ctx.Request.Body);
+                var appt = CalcomPayloadParser.Parse(doc.RootElement);
+                if (appt is not null)
+                    await scheduling.UpsertAppointmentAsync(tenant.SchemaName, appt);
+            }
+            catch (Exception ex)
+            {
+                // Nunca devolve erro (evita retry-storm do Cal.com); só registra.
+                logger.LogWarning(ex, "Falha ao processar webhook Cal.com para tenant {TenantId}", route.TenantId);
+            }
 
             return Results.Ok();
         });
