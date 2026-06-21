@@ -72,6 +72,17 @@ export interface SchedulingConfigRequest {
   instructions?: string;
 }
 
+export interface AppointmentItem {
+  id: string;
+  title: string | null;
+  startTime: string | null;
+  endTime: string | null;
+  attendeeName: string | null;
+  attendeeEmail: string | null;
+  attendeePhone: string | null;
+  status: string;
+}
+
 // Billing
 export interface Plan {
   id: string;

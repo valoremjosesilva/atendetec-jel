@@ -7,6 +7,7 @@ import DashboardPage from '@/pages/DashboardPage';
 import WhatsAppPage from '@/pages/WhatsAppPage';
 import AIConfigPage from '@/pages/AIConfigPage';
 import SchedulingPage from '@/pages/SchedulingPage';
+import AppointmentsPage from '@/pages/AppointmentsPage';
 import BillingPage from '@/pages/BillingPage';
 import ConversationsPage from '@/pages/ConversationsPage';
 import ContactsPage from '@/pages/ContactsPage';
@@ -25,6 +26,7 @@ const router = createBrowserRouter([
           { path: '/whatsapp', element: <WhatsAppPage /> },
           { path: '/ai-config', element: <AIConfigPage /> },
           { path: '/scheduling', element: <SchedulingPage /> },
+          { path: '/appointments', element: <AppointmentsPage /> },
           { path: '/conversations', element: <ConversationsPage /> },
           { path: '/contacts', element: <ContactsPage /> },
           { path: '/quick-replies', element: <QuickRepliesPage /> },

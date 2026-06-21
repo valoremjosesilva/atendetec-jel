@@ -1,6 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/api/client';
-import type { SchedulingConfigRequest, SchedulingConfigResponse } from '@/types/api';
+import type {
+  AppointmentItem,
+  SchedulingConfigRequest,
+  SchedulingConfigResponse,
+} from '@/types/api';
 
 export function useScheduling() {
   return useQuery({
@@ -22,5 +26,13 @@ export function useSaveScheduling() {
     mutationFn: (req: SchedulingConfigRequest) =>
       apiClient.put<SchedulingConfigResponse>('/scheduling/config', req).then((r) => r.data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['scheduling-config'] }),
+  });
+}
+
+export function useAppointments() {
+  return useQuery({
+    queryKey: ['appointments'],
+    queryFn: () =>
+      apiClient.get<AppointmentItem[]>('/scheduling/appointments').then((r) => r.data),
   });
 }
