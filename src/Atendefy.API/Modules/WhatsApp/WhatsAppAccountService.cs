@@ -14,6 +14,7 @@ public class WhatsAppAccountService(
     TenantDbContextFactory tenantDbFactory,
     IHttpClientFactory httpClientFactory,
     EvolutionServerConfig evolutionServer,
+    Atendefy.API.Modules.Tenants.EntitlementsService entitlements,
     ILogger<WhatsAppAccountService> logger)
 {
     private static readonly HashSet<string> ValidProviders = ["meta", "evolution"];
@@ -30,6 +31,14 @@ public class WhatsAppAccountService(
             return Result<WhatsAppAccount>.Fail("ConfigJson é obrigatório.");
 
         await using var db = tenantDbFactory.Create(schemaName);
+
+        // Trava por plano: respeita o limite de contas WhatsApp do plano do tenant.
+        var limits = await entitlements.GetForTenantAsync(tenantId);
+        var currentCount = await db.WhatsAppAccounts.CountAsync();
+        if (currentCount >= limits.WhatsAppAccounts)
+            return Result<WhatsAppAccount>.Fail(
+                $"Limite de contas WhatsApp do seu plano atingido ({limits.WhatsAppAccounts}). " +
+                "Faça upgrade do plano para adicionar mais.");
 
         var account = new WhatsAppAccount
         {

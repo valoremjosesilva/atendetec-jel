@@ -1,7 +1,5 @@
 using Atendefy.API.Modules.Tenants.Models;
 using Microsoft.AspNetCore.Mvc;
-using System.Security.Cryptography;
-using System.Text;
 
 namespace Atendefy.API.Modules.Tenants;
 
@@ -26,7 +24,7 @@ public static class TenantEndpoints
         group.MapGet("/pending", async (
             HttpContext ctx, TenantService tenantService, IConfiguration config) =>
         {
-            if (!IsAdmin(ctx, config)) return Results.StatusCode(StatusCodes.Status403Forbidden);
+            if (!AdminAuth.IsAdmin(ctx, config)) return Results.StatusCode(StatusCodes.Status403Forbidden);
             return Results.Ok(await tenantService.ListPendingAsync());
         });
 
@@ -34,27 +32,36 @@ public static class TenantEndpoints
         group.MapPost("/{subdomain}/activate", async (
             string subdomain, HttpContext ctx, TenantService tenantService, IConfiguration config) =>
         {
-            if (!IsAdmin(ctx, config)) return Results.StatusCode(StatusCodes.Status403Forbidden);
+            if (!AdminAuth.IsAdmin(ctx, config)) return Results.StatusCode(StatusCodes.Status403Forbidden);
             var result = await tenantService.ActivateAsync(subdomain);
             return result.IsSuccess
                 ? Results.Ok(new { activated = subdomain })
                 : Results.BadRequest(new { error = result.Error });
         });
 
+        // /me — perfil + entitlements do plano para o painel saber o que exibir.
+        app.MapGet("/me", async (HttpContext ctx, EntitlementsService entitlements) =>
+        {
+            var tenantIdStr = ctx.User.FindFirst("tenant_id")?.Value;
+            if (string.IsNullOrEmpty(tenantIdStr) || !Guid.TryParse(tenantIdStr, out var tenantId))
+                return Results.Json(new { error = "Token inválido" }, statusCode: 401);
+
+            var (planName, limits) = await entitlements.GetPlanForTenantAsync(tenantId);
+            return Results.Ok(new
+            {
+                role = ctx.User.FindFirst("role")?.Value,
+                planName,
+                entitlements = new
+                {
+                    aiEnabled = limits.AiEnabled,
+                    schedulingEnabled = limits.SchedulingEnabled,
+                    whatsAppAccounts = limits.WhatsAppAccounts,
+                    messagesPerMonth = limits.MessagesPerMonth,
+                    teamMembers = limits.TeamMembers
+                }
+            });
+        }).RequireAuthorization().WithTags("Tenants");
+
         return app;
-    }
-
-    // Compara o header X-Admin-Key com Admin:Key (config). Sem chave configurada => nega tudo.
-    private static bool IsAdmin(HttpContext ctx, IConfiguration config)
-    {
-        var expected = config["Admin:Key"];
-        if (string.IsNullOrEmpty(expected)) return false;
-
-        var provided = ctx.Request.Headers["X-Admin-Key"].ToString();
-        if (string.IsNullOrEmpty(provided)) return false;
-
-        var a = Encoding.UTF8.GetBytes(provided);
-        var b = Encoding.UTF8.GetBytes(expected);
-        return a.Length == b.Length && CryptographicOperations.FixedTimeEquals(a, b);
     }
 }

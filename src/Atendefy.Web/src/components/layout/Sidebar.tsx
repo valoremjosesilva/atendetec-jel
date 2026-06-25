@@ -12,14 +12,16 @@ import {
   Zap,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
+import { useEntitlements } from '@/hooks/useEntitlements';
 import { cn } from '@/lib/utils';
 
+// `feature` opcional: o item só aparece se o plano do tenant permitir.
 const navItems = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/whatsapp', label: 'WhatsApp', icon: Wifi },
-  { to: '/ai-config', label: 'IA', icon: Bot },
-  { to: '/scheduling', label: 'Agenda', icon: CalendarClock },
-  { to: '/appointments', label: 'Agendamentos', icon: CalendarCheck },
+  { to: '/ai-config', label: 'IA', icon: Bot, feature: 'aiEnabled' as const },
+  { to: '/scheduling', label: 'Agenda', icon: CalendarClock, feature: 'schedulingEnabled' as const },
+  { to: '/appointments', label: 'Agendamentos', icon: CalendarCheck, feature: 'schedulingEnabled' as const },
   { to: '/conversations', label: 'Conversas', icon: MessageSquare },
   { to: '/contacts', label: 'Contatos', icon: Users },
   { to: '/quick-replies', label: 'Respostas Rápidas', icon: Zap },
@@ -29,6 +31,12 @@ const navItems = [
 export default function Sidebar() {
   const clear = useAuthStore((s) => s.clear);
   const subdomain = useAuthStore((s) => s.subdomain);
+  const { data: me } = useEntitlements();
+
+  // Enquanto /me não carrega, não esconde nada (evita "piscar" o menu).
+  const items = navItems.filter(
+    (item) => !item.feature || !me || me.entitlements[item.feature]
+  );
 
   return (
     <aside className="w-56 flex flex-col h-full border-r bg-card">
@@ -37,7 +45,7 @@ export default function Sidebar() {
         <p className="text-xs text-muted-foreground truncate">{subdomain}</p>
       </div>
       <nav className="flex-1 p-2 space-y-1">
-        {navItems.map(({ to, label, icon: Icon }) => (
+        {items.map(({ to, label, icon: Icon }) => (
           <NavLink
             key={to}
             to={to}

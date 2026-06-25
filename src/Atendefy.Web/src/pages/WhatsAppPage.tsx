@@ -22,6 +22,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, QrCode } from 'lucide-react';
 import { WhatsAppStatus, WhatsAppProvider } from '@/lib/constants';
+import { useEntitlements } from '@/hooks/useEntitlements';
 
 type Provider = 'meta' | 'evolution';
 
@@ -116,7 +117,12 @@ function QrDialog({ accountId }: { accountId: string }) {
 
 export default function WhatsAppPage() {
   const { data: accounts, isLoading } = useWhatsAppAccounts();
+  const { data: me } = useEntitlements();
   const createAccount = useCreateWhatsAppAccount();
+
+  const limit = me?.entitlements.whatsAppAccounts;
+  const used = accounts?.length ?? 0;
+  const atLimit = limit !== undefined && used >= limit;
 
   const [open, setOpen] = useState(false);
   const [provider, setProvider] = useState<Provider>('meta');
@@ -170,9 +176,16 @@ export default function WhatsAppPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Contas WhatsApp</h1>
+        <div>
+          <h1 className="text-2xl font-bold">Contas WhatsApp</h1>
+          {limit !== undefined && (
+            <p className="text-xs text-muted-foreground mt-1">
+              {used} de {limit} conta(s) do seu plano
+            </p>
+          )}
+        </div>
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger render={<Button />}>
+          <DialogTrigger render={<Button disabled={atLimit} />}>
             <Plus className="h-4 w-4 mr-2" />
             Nova conta
           </DialogTrigger>

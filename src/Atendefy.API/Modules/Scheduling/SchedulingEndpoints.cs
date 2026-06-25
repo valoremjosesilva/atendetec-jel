@@ -1,5 +1,6 @@
 using Atendefy.API.Infrastructure.Database;
 using Atendefy.API.Modules.Scheduling.Models;
+using Atendefy.API.Modules.Tenants;
 using Atendefy.API.Modules.Webhooks.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -18,11 +19,19 @@ public static class SchedulingEndpoints
             [FromBody] CalendarConfigRequest request,
             SchedulingService service,
             PublicDbContext publicDb,
+            EntitlementsService entitlements,
             IConfiguration config,
             HttpContext ctx) =>
         {
             var (tenantId, schemaName, error) = await ResolveTenantAsync(ctx, publicDb);
             if (error is not null) return Results.Json(new { error }, statusCode: 401);
+
+            // Trava por plano: Agenda só pode ser configurada se o plano permitir.
+            var limits = await entitlements.GetForTenantAsync(tenantId);
+            if (!limits.SchedulingEnabled)
+                return Results.Json(
+                    new { error = "Agenda não disponível no seu plano. Faça upgrade para habilitar." },
+                    statusCode: StatusCodes.Status403Forbidden);
 
             var result = await service.UpsertAsync(schemaName, request);
             if (!result.IsSuccess) return Results.BadRequest(new { error = result.Error });

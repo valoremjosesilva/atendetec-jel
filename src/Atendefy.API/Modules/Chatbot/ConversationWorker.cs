@@ -5,10 +5,12 @@ using Atendefy.API.Modules.AI;
 using Atendefy.API.Modules.AI.Models;
 using Atendefy.API.Modules.Chatbot.Models;
 using Atendefy.API.Modules.Scheduling.Models;
+using Atendefy.API.Modules.Tenants;
 using Atendefy.API.Modules.WhatsApp;
 using Atendefy.API.Modules.WhatsApp.Models;
 using Atendefy.API.SharedKernel.Extensions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
@@ -23,6 +25,7 @@ public class ConversationWorker(
     TenantRateLimiter rateLimiter,
     string encryptionKey,
     IConversationEventEmitter emitter,
+    IServiceScopeFactory scopeFactory,
     ILogger<ConversationWorker> logger) : BackgroundService
 {
     private const string StreamName = "messages.inbound";
@@ -80,6 +83,22 @@ public class ConversationWorker(
 
         var accountId = Guid.TryParse(msg.AccountId, out var parsedId) ? parsedId : (Guid?)null;
 
+        // Entitlements do plano do tenant (IA on/off, agenda on/off, etc.).
+        var limits = await ResolveLimitsAsync(msg.TenantId);
+
+        // IA desligada no plano: a mensagem do cliente é salva (atendimento humano em Conversas),
+        // mas o bot não responde.
+        if (!limits.AiEnabled)
+        {
+            var convId = await ConversationService.PersistUserOnlyAsync(
+                tenantDbFactory, msg.SchemaName, msg.ContactPhone, msg.MessageText, accountId);
+            await UpsertContactAsync(msg.SchemaName, msg.ContactPhone);
+            emitter.Emit(msg.TenantId, JsonSerializer.Serialize(
+                new { type = "message_added", conversationId = convId }));
+            logger.LogInformation("IA desativada no plano do tenant {TenantId} — mensagem salva sem resposta", msg.TenantId);
+            return;
+        }
+
         // Check BotPaused before loading AI config to avoid unnecessary DB reads
         await using (var checkDb = tenantDbFactory.Create(msg.SchemaName))
         {
@@ -124,7 +143,8 @@ public class ConversationWorker(
         CalendarConfig? calendar = null;
         try { calendar = await tenantDb.CalendarConfigs.FirstOrDefaultAsync(); }
         catch (Exception ex) { logger.LogWarning(ex, "calendar_configs indisponível para {Schema} — agendamento desativado", msg.SchemaName); }
-        var schedulingOn = calendar is { Enabled: true } && !string.IsNullOrWhiteSpace(calendar.BookingUrl);
+        var schedulingOn = limits.SchedulingEnabled
+            && calendar is { Enabled: true } && !string.IsNullOrWhiteSpace(calendar.BookingUrl);
         if (schedulingOn)
             systemPrompt += BuildSchedulingInstruction(calendar!);
 
@@ -165,6 +185,24 @@ public class ConversationWorker(
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Falha ao enviar resposta WhatsApp para {Phone} (conversa salva)", msg.ContactPhone);
+        }
+    }
+
+    // O worker é singleton; EntitlementsService é scoped (usa PublicDbContext). Resolve num scope curto.
+    // Em caso de falha, devolve o fallback "Free" (não bloqueia o atendimento por erro de infra).
+    private async Task<Billing.Models.PlanLimits> ResolveLimitsAsync(string tenantId)
+    {
+        if (!Guid.TryParse(tenantId, out var tid)) return EntitlementsService.FreeFallback;
+        try
+        {
+            using var scope = scopeFactory.CreateScope();
+            var entitlements = scope.ServiceProvider.GetRequiredService<EntitlementsService>();
+            return await entitlements.GetForTenantAsync(tid);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Falha ao resolver entitlements do tenant {TenantId} — usando fallback", tenantId);
+            return EntitlementsService.FreeFallback;
         }
     }
 

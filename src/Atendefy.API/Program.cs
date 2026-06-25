@@ -64,6 +64,8 @@ builder.Services.AddSingleton(sp =>
 // Tenant
 builder.Services.AddSingleton(new TenantResolver(baseDomain));
 builder.Services.AddScoped<TenantService>();
+builder.Services.AddScoped<EntitlementsService>();
+builder.Services.AddScoped<AdminService>();
 builder.Services.AddSingleton<ITenantProvisioner>(_ => new TenantProvisioner(connStr));
 
 // Auth
@@ -134,6 +136,7 @@ builder.Services.AddHostedService(sp => new ConversationWorker(
     sp.GetRequiredService<TenantRateLimiter>(),
     encryptionKey,
     sp.GetRequiredService<IConversationEventEmitter>(),
+    sp.GetRequiredService<IServiceScopeFactory>(),
     sp.GetRequiredService<ILogger<ConversationWorker>>()));
 
 // Billing
@@ -193,6 +196,7 @@ app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = Dat
 
 app.MapAuthEndpoints();
 app.MapTenantEndpoints();
+app.MapAdminEndpoints();
 app.MapWhatsAppEndpoints();
 app.MapAIEndpoints();
 app.MapSchedulingEndpoints();
@@ -212,6 +216,39 @@ if (!app.Environment.IsEnvironment("Testing"))
         var db = scope.ServiceProvider.GetRequiredService<PublicDbContext>();
         try { await db.Database.MigrateAsync(); }
         catch (Exception ex) { Log.Fatal(ex, "Database migration failed"); throw; }
+
+        // Seed idempotente dos planos Basic/Pro/Premium (só quando não há nenhum plano).
+        try
+        {
+            if (!await db.Plans.AnyAsync())
+            {
+                db.Plans.AddRange(
+                    new Atendefy.API.Modules.Billing.Models.Plan
+                    {
+                        Name = "Basic", PriceMonthly = 0, PriceYearly = 0, IsActive = true,
+                        LimitsJson = new Atendefy.API.Modules.Billing.Models.PlanLimits(
+                            MessagesPerMonth: 1000, WhatsAppAccounts: 1, TeamMembers: 1,
+                            AiEnabled: true, SchedulingEnabled: false).ToJson()
+                    },
+                    new Atendefy.API.Modules.Billing.Models.Plan
+                    {
+                        Name = "Pro", PriceMonthly = 0, PriceYearly = 0, IsActive = true,
+                        LimitsJson = new Atendefy.API.Modules.Billing.Models.PlanLimits(
+                            MessagesPerMonth: 5000, WhatsAppAccounts: 3, TeamMembers: 5,
+                            AiEnabled: true, SchedulingEnabled: true).ToJson()
+                    },
+                    new Atendefy.API.Modules.Billing.Models.Plan
+                    {
+                        Name = "Premium", PriceMonthly = 0, PriceYearly = 0, IsActive = true,
+                        LimitsJson = new Atendefy.API.Modules.Billing.Models.PlanLimits(
+                            MessagesPerMonth: 50000, WhatsAppAccounts: 10, TeamMembers: 20,
+                            AiEnabled: true, SchedulingEnabled: true).ToJson()
+                    });
+                await db.SaveChangesAsync();
+                Log.Information("Planos Basic/Pro/Premium criados (seed inicial)");
+            }
+        }
+        catch (Exception ex) { Log.Error(ex, "Falha ao semear planos"); }
     }
 
     // Tenant schema migrations (idempotent — safe to re-run on every startup)
