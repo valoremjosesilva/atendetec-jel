@@ -15,6 +15,11 @@ public class EntitlementsService(PublicDbContext db)
         MessagesPerMonth: 1000, WhatsAppAccounts: 1, TeamMembers: 1,
         AiEnabled: true, SchedulingEnabled: false);
 
+    // Chave do contador mensal de mensagens da IA por tenant (Redis). Expira sozinha após o mês.
+    // Centralizada aqui para o worker (incrementa) e o /me (lê) usarem exatamente o mesmo formato.
+    public static string MonthlyUsageKey(string tenantId, DateTime utcNow) =>
+        $"usage:{tenantId}:{utcNow:yyyyMM}";
+
     public async Task<PlanLimits> GetForTenantAsync(Guid tenantId)
     {
         var planId = await db.Tenants

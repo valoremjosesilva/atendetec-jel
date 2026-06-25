@@ -13,6 +13,7 @@ export interface MeResponse {
   role: string | null;
   planName: string | null;
   entitlements: Entitlements;
+  usage: { messagesUsed: number };
 }
 
 export function useEntitlements() {

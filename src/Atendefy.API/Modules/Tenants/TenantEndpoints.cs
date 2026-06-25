@@ -39,14 +39,23 @@ public static class TenantEndpoints
                 : Results.BadRequest(new { error = result.Error });
         });
 
-        // /me — perfil + entitlements do plano para o painel saber o que exibir.
-        app.MapGet("/me", async (HttpContext ctx, EntitlementsService entitlements) =>
+        // /me — perfil + entitlements do plano + uso mensal da IA, para o painel saber o que exibir.
+        app.MapGet("/me", async (
+            HttpContext ctx,
+            EntitlementsService entitlements,
+            Atendefy.API.Infrastructure.Cache.RedisService redis) =>
         {
             var tenantIdStr = ctx.User.FindFirst("tenant_id")?.Value;
             if (string.IsNullOrEmpty(tenantIdStr) || !Guid.TryParse(tenantIdStr, out var tenantId))
                 return Results.Json(new { error = "Token inválido" }, statusCode: 401);
 
             var (planName, limits) = await entitlements.GetPlanForTenantAsync(tenantId);
+
+            long messagesUsed = 0;
+            try { messagesUsed = await redis.GetCounterAsync(
+                EntitlementsService.MonthlyUsageKey(tenantIdStr, DateTime.UtcNow)); }
+            catch { /* Redis indisponível: uso 0 não bloqueia a UI. */ }
+
             return Results.Ok(new
             {
                 role = ctx.User.FindFirst("role")?.Value,
@@ -58,7 +67,8 @@ public static class TenantEndpoints
                     whatsAppAccounts = limits.WhatsAppAccounts,
                     messagesPerMonth = limits.MessagesPerMonth,
                     teamMembers = limits.TeamMembers
-                }
+                },
+                usage = new { messagesUsed }
             });
         }).RequireAuthorization().WithTags("Tenants");
 

@@ -137,6 +137,7 @@ builder.Services.AddHostedService(sp => new ConversationWorker(
     encryptionKey,
     sp.GetRequiredService<IConversationEventEmitter>(),
     sp.GetRequiredService<IServiceScopeFactory>(),
+    sp.GetRequiredService<RedisService>(),
     sp.GetRequiredService<ILogger<ConversationWorker>>()));
 
 // Billing

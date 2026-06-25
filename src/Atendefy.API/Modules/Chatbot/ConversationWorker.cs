@@ -26,6 +26,7 @@ public class ConversationWorker(
     string encryptionKey,
     IConversationEventEmitter emitter,
     IServiceScopeFactory scopeFactory,
+    Atendefy.API.Infrastructure.Cache.RedisService redis,
     ILogger<ConversationWorker> logger) : BackgroundService
 {
     private const string StreamName = "messages.inbound";
@@ -90,12 +91,20 @@ public class ConversationWorker(
         // mas o bot não responde.
         if (!limits.AiEnabled)
         {
-            var convId = await ConversationService.PersistUserOnlyAsync(
-                tenantDbFactory, msg.SchemaName, msg.ContactPhone, msg.MessageText, accountId);
-            await UpsertContactAsync(msg.SchemaName, msg.ContactPhone);
-            emitter.Emit(msg.TenantId, JsonSerializer.Serialize(
-                new { type = "message_added", conversationId = convId }));
+            await PersistWithoutReplyAsync(msg, accountId);
             logger.LogInformation("IA desativada no plano do tenant {TenantId} — mensagem salva sem resposta", msg.TenantId);
+            return;
+        }
+
+        // Teto de mensagens/mês do plano: contador mensal por tenant no Redis. Atingido o limite,
+        // a mensagem é salva (atendimento humano), mas a IA não responde até virar o mês.
+        var monthlyUsed = await GetMonthlyUsageAsync(msg.TenantId);
+        if (monthlyUsed >= limits.MessagesPerMonth)
+        {
+            await PersistWithoutReplyAsync(msg, accountId);
+            logger.LogInformation(
+                "Teto de mensagens/mês atingido para tenant {TenantId} ({Used}/{Limit}) — IA suspensa no mês",
+                msg.TenantId, monthlyUsed, limits.MessagesPerMonth);
             return;
         }
 
@@ -169,6 +178,9 @@ public class ConversationWorker(
             msg.MessageText, replyText, aiResult.TokensUsed,
             accountId);
 
+        // Conta esta resposta da IA no teto mensal do plano.
+        await IncrementMonthlyUsageAsync(msg.TenantId);
+
         await UpsertContactAsync(msg.SchemaName, msg.ContactPhone);
 
         emitter.Emit(msg.TenantId, JsonSerializer.Serialize(
@@ -203,6 +215,41 @@ public class ConversationWorker(
         {
             logger.LogWarning(ex, "Falha ao resolver entitlements do tenant {TenantId} — usando fallback", tenantId);
             return EntitlementsService.FreeFallback;
+        }
+    }
+
+    // Salva a mensagem do cliente sem resposta da IA (bot pausado, IA off no plano, ou teto atingido)
+    // e notifica o painel. Não conta no teto mensal (só respostas geradas pela IA contam).
+    private async Task PersistWithoutReplyAsync(InboundMessage msg, Guid? accountId)
+    {
+        var convId = await ConversationService.PersistUserOnlyAsync(
+            tenantDbFactory, msg.SchemaName, msg.ContactPhone, msg.MessageText, accountId);
+        await UpsertContactAsync(msg.SchemaName, msg.ContactPhone);
+        emitter.Emit(msg.TenantId, JsonSerializer.Serialize(
+            new { type = "message_added", conversationId = convId }));
+    }
+
+    // Chave do contador mensal de uso da IA por tenant (expira sozinha após o mês).
+    private static string MonthlyUsageKey(string tenantId) =>
+        EntitlementsService.MonthlyUsageKey(tenantId, DateTime.UtcNow);
+
+    private async Task<long> GetMonthlyUsageAsync(string tenantId)
+    {
+        try { return await redis.GetCounterAsync(MonthlyUsageKey(tenantId)); }
+        catch (Exception ex)
+        {
+            // Falha de infra não deve bloquear o atendimento: assume 0 (não atingiu o teto).
+            logger.LogWarning(ex, "Falha ao ler uso mensal do tenant {TenantId} — assumindo 0", tenantId);
+            return 0;
+        }
+    }
+
+    private async Task IncrementMonthlyUsageAsync(string tenantId)
+    {
+        try { await redis.IncrementWithTtlAsync(MonthlyUsageKey(tenantId), TimeSpan.FromDays(40)); }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Falha ao incrementar uso mensal do tenant {TenantId}", tenantId);
         }
     }
 

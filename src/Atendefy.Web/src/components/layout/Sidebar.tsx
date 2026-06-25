@@ -63,6 +63,29 @@ export default function Sidebar() {
           </NavLink>
         ))}
       </nav>
+      {me?.entitlements.aiEnabled && me.entitlements.messagesPerMonth > 0 && (
+        <div className="px-3 py-2 border-t">
+          <p className="text-[11px] text-muted-foreground">
+            Mensagens IA: {me.usage.messagesUsed}/{me.entitlements.messagesPerMonth}
+          </p>
+          <div className="mt-1 h-1 w-full rounded-full bg-muted overflow-hidden">
+            <div
+              className={cn(
+                'h-full rounded-full',
+                me.usage.messagesUsed >= me.entitlements.messagesPerMonth
+                  ? 'bg-destructive'
+                  : 'bg-primary'
+              )}
+              style={{
+                width: `${Math.min(
+                  100,
+                  (me.usage.messagesUsed / me.entitlements.messagesPerMonth) * 100
+                )}%`,
+              }}
+            />
+          </div>
+        </div>
+      )}
       <div className="p-2 border-t">
         <button
           onClick={clear}
