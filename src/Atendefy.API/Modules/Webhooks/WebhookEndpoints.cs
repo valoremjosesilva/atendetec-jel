@@ -1,5 +1,6 @@
 using Atendefy.API.Infrastructure.Database;
 using Atendefy.API.Infrastructure.Messaging;
+using Atendefy.API.Modules.Chatbot;
 using Atendefy.API.Modules.Chatbot.Models;
 using Atendefy.API.Modules.Scheduling;
 using Atendefy.API.Modules.Scheduling.Models;
@@ -151,6 +152,59 @@ public static class WebhookEndpoints
             {
                 // Nunca devolve erro (evita retry-storm do Cal.com); só registra.
                 logger.LogWarning(ex, "Falha ao processar webhook Cal.com para tenant {TenantId}", route.TenantId);
+            }
+
+            return Results.Ok();
+        });
+
+        // Horafy: write-back de agendamentos (Fase 4). Roteado por ?token= (webhook_routes),
+        // com validação de assinatura HMAC quando o segredo está configurado.
+        group.MapPost("/horafy", async (
+            HttpContext ctx,
+            PublicDbContext publicDb,
+            SchedulingService scheduling,
+            IConversationEventEmitter emitter,
+            ILoggerFactory loggerFactory,
+            [FromQuery] string? token) =>
+        {
+            var logger = loggerFactory.CreateLogger("HorafyWebhook");
+            if (string.IsNullOrEmpty(token)) return Results.Forbid();
+
+            var route = await publicDb.WebhookRoutes
+                .FirstOrDefaultAsync(r => r.Provider == "horafy" && r.LookupKey == token);
+            if (route is null) return Results.Forbid();
+
+            var tenant = await publicDb.Tenants.FindAsync(route.TenantId);
+            if (tenant is null) return Results.Ok();
+
+            ctx.Request.EnableBuffering();
+            var body = await ReadAllBytesAsync(ctx.Request.Body);
+            ctx.Request.Body.Position = 0;
+
+            // HMAC: valida quando há segredo configurado para o tenant.
+            var secret = await scheduling.GetHorafyWebhookSecretAsync(tenant.SchemaName);
+            var signature = ctx.Request.Headers["X-Horafy-Signature"].ToString();
+            if (!string.IsNullOrEmpty(secret) && !HorafyWebhook.VerifySignature(secret, body, signature))
+            {
+                logger.LogWarning("Assinatura HMAC inválida no webhook Horafy (tenant {TenantId})", route.TenantId);
+                return Results.Unauthorized();
+            }
+
+            try
+            {
+                using var doc = JsonDocument.Parse(body);
+                var appt = HorafyWebhook.Parse(doc.RootElement);
+                if (appt is not null)
+                {
+                    await scheduling.UpsertAppointmentAsync(tenant.SchemaName, appt);
+                    emitter.Emit(tenant.Id.ToString(),
+                        JsonSerializer.Serialize(new { type = "appointment_updated" }));
+                }
+            }
+            catch (Exception ex)
+            {
+                // Nunca devolve erro de parse (evita retry-storm); só registra.
+                logger.LogWarning(ex, "Falha ao processar webhook Horafy para tenant {TenantId}", route.TenantId);
             }
 
             return Results.Ok();

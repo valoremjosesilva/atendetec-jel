@@ -33,6 +33,7 @@ export default function SchedulingPage() {
   const [apiBaseUrl, setApiBaseUrl] = useState('');
   const [tenantSlug, setTenantSlug] = useState('');
   const [apiKey, setApiKey] = useState('');
+  const [webhookSecret, setWebhookSecret] = useState('');
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
   const [testMsg, setTestMsg] = useState('');
@@ -63,12 +64,14 @@ export default function SchedulingPage() {
             instructions,
             apiBaseUrl,
             tenantSlug,
-            // só envia a chave quando o usuário digitou uma nova
+            // só envia segredos quando o usuário digitou novos
             ...(apiKey ? { apiKey } : {}),
+            ...(webhookSecret ? { webhookSecret } : {}),
           }
         : { provider, bookingUrl, enabled, instructions };
       await save.mutateAsync(req);
       setApiKey('');
+      setWebhookSecret('');
       setSuccess(true);
     } catch (err: unknown) {
       const msg =
@@ -176,6 +179,37 @@ export default function SchedulingPage() {
                   <p className="text-xs text-muted-foreground">
                     Gere em <strong>Horafy → Integrações → API keys</strong>. Deixe em branco para
                     manter a chave atual.
+                  </p>
+                </div>
+
+                {config?.webhookUrl && (
+                  <div className="space-y-1 rounded-md border border-dashed p-3">
+                    <Label htmlFor="hWebhookUrl">URL do webhook (write-back)</Label>
+                    <Input
+                      id="hWebhookUrl"
+                      readOnly
+                      value={config.webhookUrl}
+                      onFocus={(e) => e.currentTarget.select()}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Cole esta URL em <strong>Horafy → Integrações → Webhook</strong> e copie o{' '}
+                      <strong>segredo</strong> gerado para o campo abaixo. Assim, mudanças feitas no
+                      Horafy (ex.: cancelamento) aparecem aqui.
+                    </p>
+                  </div>
+                )}
+
+                <div className="space-y-1">
+                  <Label htmlFor="webhookSecret">Segredo do webhook (Horafy)</Label>
+                  <Input
+                    id="webhookSecret"
+                    type="password"
+                    placeholder={config?.hasWebhookSecret ? '•••••••• (já configurado)' : 'segredo gerado pelo Horafy'}
+                    value={webhookSecret}
+                    onChange={(e) => setWebhookSecret(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Valida a assinatura dos webhooks recebidos. Deixe em branco para manter o atual.
                   </p>
                 </div>
 

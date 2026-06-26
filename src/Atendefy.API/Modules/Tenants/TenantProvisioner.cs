@@ -42,6 +42,7 @@ public class TenantProvisioner(string connectionString) : ITenantProvisioner
                 enabled BOOLEAN DEFAULT FALSE,
                 instructions TEXT,
                 webhook_token TEXT,
+                webhook_secret_encrypted TEXT,
                 api_base_url TEXT,
                 tenant_slug TEXT,
                 api_key_encrypted TEXT,

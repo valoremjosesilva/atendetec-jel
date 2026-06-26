@@ -34,6 +34,16 @@ public class SchedulingService(TenantDbContextFactory dbFactory, string encrypti
         return new HorafyConnection(cfg.ApiBaseUrl, cfg.TenantSlug, apiKey);
     }
 
+    /// <summary>Segredo (descriptografado) para validar a assinatura HMAC dos webhooks do Horafy.</summary>
+    public async Task<string?> GetHorafyWebhookSecretAsync(string schemaName)
+    {
+        await using var db = dbFactory.Create(schemaName);
+        var cfg = await db.CalendarConfigs.FirstOrDefaultAsync();
+        if (string.IsNullOrEmpty(cfg?.WebhookSecretEncrypted)) return null;
+        try { return AesEncryption.Decrypt(cfg.WebhookSecretEncrypted, encryptionKey); }
+        catch { return null; }
+    }
+
     public async Task<Result<CalendarConfig>> UpsertAsync(string schemaName, CalendarConfigRequest request)
     {
         var provider = string.IsNullOrWhiteSpace(request.Provider) ? "calcom" : request.Provider.Trim();
@@ -83,6 +93,11 @@ public class SchedulingService(TenantDbContextFactory dbFactory, string encrypti
                 existing.DefaultResourceId = request.DefaultResourceId;
                 if (!string.IsNullOrEmpty(apiKey))
                     existing.ApiKeyEncrypted = AesEncryption.Encrypt(apiKey, encryptionKey);
+                if (!string.IsNullOrWhiteSpace(request.WebhookSecret))
+                    existing.WebhookSecretEncrypted = AesEncryption.Encrypt(request.WebhookSecret.Trim(), encryptionKey);
+                // Token p/ rotear o webhook de entrada (write-back) -> tenant.
+                if (request.Enabled && string.IsNullOrEmpty(existing.WebhookToken))
+                    existing.WebhookToken = Guid.NewGuid().ToString("N");
             }
             else
             {
@@ -111,6 +126,9 @@ public class SchedulingService(TenantDbContextFactory dbFactory, string encrypti
             config.DefaultResourceId = request.DefaultResourceId;
             if (!string.IsNullOrEmpty(apiKey))
                 config.ApiKeyEncrypted = AesEncryption.Encrypt(apiKey, encryptionKey);
+            if (!string.IsNullOrWhiteSpace(request.WebhookSecret))
+                config.WebhookSecretEncrypted = AesEncryption.Encrypt(request.WebhookSecret.Trim(), encryptionKey);
+            config.WebhookToken = request.Enabled ? Guid.NewGuid().ToString("N") : null;
         }
         else
         {

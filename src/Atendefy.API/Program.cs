@@ -280,7 +280,8 @@ if (!app.Environment.IsEnvironment("Testing"))
                         ADD COLUMN IF NOT EXISTS tenant_slug TEXT,
                         ADD COLUMN IF NOT EXISTS api_key_encrypted TEXT,
                         ADD COLUMN IF NOT EXISTS default_service_id UUID,
-                        ADD COLUMN IF NOT EXISTS default_resource_id UUID;
+                        ADD COLUMN IF NOT EXISTS default_resource_id UUID,
+                        ADD COLUMN IF NOT EXISTS webhook_secret_encrypted TEXT;
                     CREATE TABLE IF NOT EXISTS "{t.SchemaName}".contacts (
                         phone VARCHAR(30) PRIMARY KEY,
                         name VARCHAR(200),

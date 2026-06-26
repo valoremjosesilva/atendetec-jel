@@ -67,6 +67,7 @@ export interface SchedulingConfigResponse {
   apiBaseUrl?: string | null;
   tenantSlug?: string | null;
   hasApiKey?: boolean;
+  hasWebhookSecret?: boolean;
   defaultServiceId?: string | null;
   defaultResourceId?: string | null;
 }
@@ -80,6 +81,7 @@ export interface SchedulingConfigRequest {
   apiBaseUrl?: string;
   tenantSlug?: string;
   apiKey?: string;
+  webhookSecret?: string;
   defaultServiceId?: string | null;
   defaultResourceId?: string | null;
 }

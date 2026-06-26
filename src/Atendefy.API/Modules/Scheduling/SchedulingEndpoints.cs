@@ -37,8 +37,8 @@ public static class SchedulingEndpoints
             var result = await service.UpsertAsync(schemaName, request);
             if (!result.IsSuccess) return Results.BadRequest(new { error = result.Error });
 
-            // Fase 3: garante a rota do webhook (token -> tenant) quando há token.
-            await EnsureWebhookRouteAsync(publicDb, tenantId, result.Value!.WebhookToken);
+            // Garante a rota do webhook (token -> tenant) quando há token, por provider.
+            await EnsureWebhookRouteAsync(publicDb, tenantId, result.Value!.Provider, result.Value!.WebhookToken);
 
             return Results.Ok(Shape(result.Value!, config));
         });
@@ -111,32 +111,36 @@ public static class SchedulingEndpoints
         HasApiKey = !string.IsNullOrEmpty(c.ApiKeyEncrypted),
         c.DefaultServiceId,
         c.DefaultResourceId,
-        WebhookUrl = BuildWebhookUrl(config, c.WebhookToken)
+        HasWebhookSecret = !string.IsNullOrEmpty(c.WebhookSecretEncrypted),
+        WebhookUrl = BuildWebhookUrl(config, c.Provider, c.WebhookToken)
     };
 
-    private static string? BuildWebhookUrl(IConfiguration config, string? token)
+    private static string? BuildWebhookUrl(IConfiguration config, string provider, string? token)
     {
         if (string.IsNullOrEmpty(token)) return null;
         var baseDomain = config["App:BaseDomain"];
-        return string.IsNullOrEmpty(baseDomain)
-            ? null
-            : $"https://api.{baseDomain}/webhooks/calcom?token={token}";
+        if (string.IsNullOrEmpty(baseDomain)) return null;
+        var path = provider == "horafy" ? "horafy" : "calcom";
+        return $"https://api.{baseDomain}/webhooks/{path}?token={token}";
     }
 
-    private static async Task EnsureWebhookRouteAsync(PublicDbContext publicDb, Guid tenantId, string? token)
+    private static async Task EnsureWebhookRouteAsync(
+        PublicDbContext publicDb, Guid tenantId, string provider, string? token)
     {
         if (string.IsNullOrEmpty(token)) return;
+        // Só há intake de webhook para Cal.com e Horafy.
+        var routeProvider = provider == "horafy" ? "horafy" : "calcom";
 
         var exists = await publicDb.WebhookRoutes
-            .AnyAsync(r => r.Provider == "calcom" && r.LookupKey == token);
+            .AnyAsync(r => r.Provider == routeProvider && r.LookupKey == token);
         if (exists) return;
 
         publicDb.WebhookRoutes.Add(new WebhookRoute
         {
             TenantId = tenantId,
-            Provider = "calcom",
+            Provider = routeProvider,
             LookupKey = token,
-            AccountId = Guid.Empty   // Cal.com não tem conta WhatsApp associada
+            AccountId = Guid.Empty   // sem conta WhatsApp associada
         });
         await publicDb.SaveChangesAsync();
     }

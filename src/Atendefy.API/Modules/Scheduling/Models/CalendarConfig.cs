@@ -7,8 +7,10 @@ public class CalendarConfig
     public string? BookingUrl { get; set; }
     public bool Enabled { get; set; }
     public string? Instructions { get; set; }
-    // Token usado na URL do webhook do Cal.com (Fase 3 — write-back). Gerado ao ativar.
+    // Token usado na URL do webhook (Cal.com/Horafy — write-back). Gerado ao ativar.
     public string? WebhookToken { get; set; }
+    // Segredo (criptografado) para validar a assinatura HMAC dos webhooks do Horafy.
+    public string? WebhookSecretEncrypted { get; set; }
 
     // ── Provider "horafy" (agenda própria via API) ──────────────────────────────
     /// <summary>Base URL da API do Horafy (ex.: https://barbearia.horafy.com.br).</summary>
@@ -36,5 +38,6 @@ public record CalendarConfigRequest(
     string? TenantSlug = null,
     string? ApiKey = null,
     Guid? DefaultServiceId = null,
-    Guid? DefaultResourceId = null
+    Guid? DefaultResourceId = null,
+    string? WebhookSecret = null
 );
