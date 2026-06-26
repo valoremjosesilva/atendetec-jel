@@ -73,7 +73,8 @@ public class ConversationWorker(
             ContactPhone: fields["contact_phone"],
             MessageText: fields["message_text"],
             Provider: fields["provider"],
-            AccountId: fields["account_id"]
+            AccountId: fields["account_id"],
+            ContactName: fields.TryGetValue("contact_name", out var cn) && !string.IsNullOrWhiteSpace(cn) ? cn : null
         );
 
         if (!await rateLimiter.IsAllowedAsync(msg.TenantId))
@@ -118,7 +119,7 @@ public class ConversationWorker(
             {
                 var convId = await ConversationService.PersistUserOnlyAsync(
                     tenantDbFactory, msg.SchemaName, msg.ContactPhone, msg.MessageText, accountId);
-                await UpsertContactAsync(msg.SchemaName, msg.ContactPhone);
+                await UpsertContactAsync(msg.SchemaName, msg.ContactPhone, msg.ContactName);
                 emitter.Emit(msg.TenantId, JsonSerializer.Serialize(
                     new { type = "message_added", conversationId = convId }));
                 logger.LogInformation("Bot pausado para {Phone} — mensagem salva sem resposta", msg.ContactPhone);
@@ -181,7 +182,7 @@ public class ConversationWorker(
         // Conta esta resposta da IA no teto mensal do plano.
         await IncrementMonthlyUsageAsync(msg.TenantId);
 
-        await UpsertContactAsync(msg.SchemaName, msg.ContactPhone);
+        await UpsertContactAsync(msg.SchemaName, msg.ContactPhone, msg.ContactName);
 
         emitter.Emit(msg.TenantId, JsonSerializer.Serialize(
             new { type = "message_added", conversationId }));
@@ -224,7 +225,7 @@ public class ConversationWorker(
     {
         var convId = await ConversationService.PersistUserOnlyAsync(
             tenantDbFactory, msg.SchemaName, msg.ContactPhone, msg.MessageText, accountId);
-        await UpsertContactAsync(msg.SchemaName, msg.ContactPhone);
+        await UpsertContactAsync(msg.SchemaName, msg.ContactPhone, msg.ContactName);
         emitter.Emit(msg.TenantId, JsonSerializer.Serialize(
             new { type = "message_added", conversationId = convId }));
     }
@@ -263,14 +264,22 @@ public class ConversationWorker(
             text, @"agend|hor[áa]rio|marcar|remarcar|consulta|disponibilidade|reservar",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
-    private async Task UpsertContactAsync(string schemaName, string phone)
+    private async Task UpsertContactAsync(string schemaName, string phone, string? name = null)
     {
         try
         {
+            var trimmedName = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
             await using var db = tenantDbFactory.Create(schemaName);
-            if (!await db.Contacts.AnyAsync(c => c.Phone == phone))
+            var contact = await db.Contacts.FirstOrDefaultAsync(c => c.Phone == phone);
+            if (contact is null)
             {
-                db.Contacts.Add(new Contact { Phone = phone });
+                db.Contacts.Add(new Contact { Phone = phone, Name = trimmedName });
+                await db.SaveChangesAsync();
+            }
+            else if (trimmedName is not null && contact.Name != trimmedName)
+            {
+                // Atualiza o nome quando o WhatsApp informa um pushName novo/diferente.
+                contact.Name = trimmedName;
                 await db.SaveChangesAsync();
             }
         }

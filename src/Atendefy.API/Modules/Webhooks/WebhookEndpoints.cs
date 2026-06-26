@@ -108,7 +108,8 @@ public static class WebhookEndpoints
                 ContactPhone: phone,
                 MessageText: messageText,
                 Provider: "evolution",
-                AccountId: route.AccountId.ToString()
+                AccountId: route.AccountId.ToString(),
+                ContactName: payload.Data.PushName
             ));
 
             return Results.Ok();
@@ -166,6 +167,7 @@ public static class WebhookEndpoints
             ["contact_phone"] = msg.ContactPhone,
             ["message_text"]  = msg.MessageText,
             ["provider"]      = msg.Provider,
-            ["account_id"]    = msg.AccountId
+            ["account_id"]    = msg.AccountId,
+            ["contact_name"]  = msg.ContactName ?? string.Empty
         });
 }

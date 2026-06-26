@@ -9,6 +9,7 @@ using Atendefy.API.Modules.Billing;
 using Atendefy.API.Modules.Billing.Gateways;
 using Atendefy.API.Modules.Chatbot;
 using Atendefy.API.Modules.Scheduling;
+using Atendefy.API.Modules.Scheduling.Horafy;
 using Atendefy.API.Modules.Tenants;
 using Atendefy.API.Modules.Webhooks;
 using Atendefy.API.Modules.WhatsApp;
@@ -117,8 +118,11 @@ builder.Services.AddSingleton(sp => new AIProviderFactory(
 builder.Services.AddScoped(sp =>
     new AiConfigService(sp.GetRequiredService<TenantDbContextFactory>(), encryptionKey));
 
-// Scheduling (agendamento via link — Cal.com/Calendly)
-builder.Services.AddScoped<SchedulingService>();
+// Scheduling (agendamento via link — Cal.com/Calendly — e via API — Horafy)
+builder.Services.AddScoped(sp =>
+    new SchedulingService(sp.GetRequiredService<TenantDbContextFactory>(), encryptionKey));
+builder.Services.AddHttpClient("horafy");
+builder.Services.AddSingleton<HorafyClient>();
 
 // Webhooks
 builder.Services.AddSingleton(new MetaWebhookValidator(metaAppSecret));
@@ -269,6 +273,12 @@ if (!app.Environment.IsEnvironment("Testing"))
                         ADD COLUMN IF NOT EXISTS account_id UUID,
                         ADD COLUMN IF NOT EXISTS is_resolved BOOLEAN DEFAULT FALSE,
                         ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ;
+                    ALTER TABLE IF EXISTS "{t.SchemaName}".calendar_configs
+                        ADD COLUMN IF NOT EXISTS api_base_url TEXT,
+                        ADD COLUMN IF NOT EXISTS tenant_slug TEXT,
+                        ADD COLUMN IF NOT EXISTS api_key_encrypted TEXT,
+                        ADD COLUMN IF NOT EXISTS default_service_id UUID,
+                        ADD COLUMN IF NOT EXISTS default_resource_id UUID;
                     CREATE TABLE IF NOT EXISTS "{t.SchemaName}".contacts (
                         phone VARCHAR(30) PRIMARY KEY,
                         name VARCHAR(200),

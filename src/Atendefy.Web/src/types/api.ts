@@ -63,13 +63,31 @@ export interface SchedulingConfigResponse {
   enabled: boolean;
   instructions: string | null;
   webhookUrl: string | null;
+  // Provider "horafy"
+  apiBaseUrl?: string | null;
+  tenantSlug?: string | null;
+  hasApiKey?: boolean;
+  defaultServiceId?: string | null;
+  defaultResourceId?: string | null;
 }
 
 export interface SchedulingConfigRequest {
   provider?: string;
-  bookingUrl: string;
+  bookingUrl?: string;
   enabled: boolean;
   instructions?: string;
+  // Provider "horafy"
+  apiBaseUrl?: string;
+  tenantSlug?: string;
+  apiKey?: string;
+  defaultServiceId?: string | null;
+  defaultResourceId?: string | null;
+}
+
+export interface HorafyTestResponse {
+  ok: boolean;
+  servicesCount?: number;
+  error?: string;
 }
 
 export interface AppointmentItem {

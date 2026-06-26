@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useScheduling, useSaveScheduling } from '@/hooks/useScheduling';
+import { useScheduling, useSaveScheduling, useTestHorafy } from '@/hooks/useScheduling';
+import type { SchedulingConfigRequest } from '@/types/api';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -22,13 +23,21 @@ import { Textarea } from '@/components/ui/textarea';
 export default function SchedulingPage() {
   const { data: config, isLoading } = useScheduling();
   const save = useSaveScheduling();
+  const test = useTestHorafy();
 
   const [enabled, setEnabled] = useState(false);
   const [provider, setProvider] = useState('calcom');
   const [bookingUrl, setBookingUrl] = useState('');
   const [instructions, setInstructions] = useState('');
+  // Horafy
+  const [apiBaseUrl, setApiBaseUrl] = useState('');
+  const [tenantSlug, setTenantSlug] = useState('');
+  const [apiKey, setApiKey] = useState('');
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [testMsg, setTestMsg] = useState('');
+
+  const isHorafy = provider === 'horafy';
 
   useEffect(() => {
     if (config) {
@@ -36,6 +45,8 @@ export default function SchedulingPage() {
       setProvider(config.provider ?? 'calcom');
       setBookingUrl(config.bookingUrl ?? '');
       setInstructions(config.instructions ?? '');
+      setApiBaseUrl(config.apiBaseUrl ?? '');
+      setTenantSlug(config.tenantSlug ?? '');
     }
   }, [config]);
 
@@ -43,14 +54,44 @@ export default function SchedulingPage() {
     e.preventDefault();
     setError('');
     setSuccess(false);
+    setTestMsg('');
     try {
-      await save.mutateAsync({ provider, bookingUrl, enabled, instructions });
+      const req: SchedulingConfigRequest = isHorafy
+        ? {
+            provider,
+            enabled,
+            instructions,
+            apiBaseUrl,
+            tenantSlug,
+            // só envia a chave quando o usuário digitou uma nova
+            ...(apiKey ? { apiKey } : {}),
+          }
+        : { provider, bookingUrl, enabled, instructions };
+      await save.mutateAsync(req);
+      setApiKey('');
       setSuccess(true);
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
         'Erro ao salvar configuração.';
       setError(msg);
+    }
+  }
+
+  async function handleTest() {
+    setTestMsg('');
+    try {
+      const r = await test.mutateAsync();
+      setTestMsg(
+        r.ok
+          ? `Conexão OK — ${r.servicesCount ?? 0} serviço(s) encontrado(s).`
+          : `Falha: ${r.error ?? 'erro desconhecido'}`,
+      );
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
+        'Erro ao testar conexão.';
+      setTestMsg(`Falha: ${msg}`);
     }
   }
 
@@ -61,11 +102,10 @@ export default function SchedulingPage() {
       <h1 className="text-2xl font-bold">Agenda</h1>
       <Card>
         <CardHeader>
-          <CardTitle>Agendamento por link</CardTitle>
+          <CardTitle>Agendamento</CardTitle>
           <CardDescription>
-            Quando ativado, o assistente envia o seu link de agendamento (Cal.com, Calendly…) sempre
-            que o cliente quiser marcar um horário. Conecte sua agenda Google/Apple dentro do próprio
-            serviço de agendamento.
+            Conecte uma agenda externa por link (Cal.com, Calendly) ou a sua agenda própria do
+            Horafy via API, para agendar dentro da conversa do WhatsApp.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -93,6 +133,7 @@ export default function SchedulingPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="horafy">Horafy (agenda própria)</SelectItem>
                   <SelectItem value="calcom">Cal.com</SelectItem>
                   <SelectItem value="calendly">Calendly</SelectItem>
                   <SelectItem value="other">Outro</SelectItem>
@@ -100,30 +141,77 @@ export default function SchedulingPage() {
               </Select>
             </div>
 
-            <div className="space-y-1">
-              <Label htmlFor="bookingUrl">Link de agendamento</Label>
-              <Input
-                id="bookingUrl"
-                type="url"
-                placeholder="https://cal.com/sua-empresa/consulta"
-                value={bookingUrl}
-                onChange={(e) => setBookingUrl(e.target.value)}
-                required={enabled}
-              />
-            </div>
+            {isHorafy ? (
+              <>
+                <div className="space-y-1">
+                  <Label htmlFor="apiBaseUrl">URL da API do Horafy</Label>
+                  <Input
+                    id="apiBaseUrl"
+                    type="url"
+                    placeholder="https://sua-empresa.horafy.com.br"
+                    value={apiBaseUrl}
+                    onChange={(e) => setApiBaseUrl(e.target.value)}
+                    required={enabled}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="tenantSlug">Slug do tenant</Label>
+                  <Input
+                    id="tenantSlug"
+                    placeholder="sua-empresa"
+                    value={tenantSlug}
+                    onChange={(e) => setTenantSlug(e.target.value)}
+                    required={enabled}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="apiKey">Chave de API</Label>
+                  <Input
+                    id="apiKey"
+                    type="password"
+                    placeholder={config?.hasApiKey ? '•••••••• (já configurada)' : 'htf_live_…'}
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Gere em <strong>Horafy → Integrações → API keys</strong>. Deixe em branco para
+                    manter a chave atual.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <Button type="button" variant="outline" onClick={handleTest} disabled={test.isPending}>
+                    {test.isPending ? 'Testando…' : 'Testar conexão'}
+                  </Button>
+                  {testMsg && <span className="text-sm text-muted-foreground">{testMsg}</span>}
+                </div>
+              </>
+            ) : (
+              <div className="space-y-1">
+                <Label htmlFor="bookingUrl">Link de agendamento</Label>
+                <Input
+                  id="bookingUrl"
+                  type="url"
+                  placeholder="https://cal.com/sua-empresa/consulta"
+                  value={bookingUrl}
+                  onChange={(e) => setBookingUrl(e.target.value)}
+                  required={enabled}
+                />
+              </div>
+            )}
 
             <div className="space-y-1">
               <Label htmlFor="instructions">Instruções para o assistente (opcional)</Label>
               <Textarea
                 id="instructions"
                 rows={3}
-                placeholder="Ex.: ofereça o link apenas para consultas; atendimento de seg a sex."
+                placeholder="Ex.: atendimento de seg a sex; confirme o serviço antes de agendar."
                 value={instructions}
                 onChange={(e) => setInstructions(e.target.value)}
               />
             </div>
 
-            {config?.webhookUrl && (
+            {!isHorafy && config?.webhookUrl && (
               <div className="space-y-1 rounded-md border border-dashed p-3">
                 <Label htmlFor="webhookUrl">URL do webhook (opcional — ver agendamentos no painel)</Label>
                 <Input
@@ -135,7 +223,7 @@ export default function SchedulingPage() {
                 <p className="text-xs text-muted-foreground">
                   Cole esta URL em <strong>Cal.com → Settings → Webhooks</strong> (evento{' '}
                   <strong>BOOKING_CREATED</strong>) para que os agendamentos confirmados apareçam no
-                  painel. Adicione também a pergunta de telefone no seu event type.
+                  painel.
                 </p>
               </div>
             )}

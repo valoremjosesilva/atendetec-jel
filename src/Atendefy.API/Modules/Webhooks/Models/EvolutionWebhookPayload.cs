@@ -10,7 +10,8 @@ public record EvolutionWebhookPayload(
 
 public record EvolutionData(
     [property: JsonPropertyName("key")] EvolutionKey Key,
-    [property: JsonPropertyName("message")] EvolutionMessage? Message
+    [property: JsonPropertyName("message")] EvolutionMessage? Message,
+    [property: JsonPropertyName("pushName")] string? PushName = null
 );
 
 public record EvolutionKey(

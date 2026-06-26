@@ -42,6 +42,11 @@ public class TenantProvisioner(string connectionString) : ITenantProvisioner
                 enabled BOOLEAN DEFAULT FALSE,
                 instructions TEXT,
                 webhook_token TEXT,
+                api_base_url TEXT,
+                tenant_slug TEXT,
+                api_key_encrypted TEXT,
+                default_service_id UUID,
+                default_resource_id UUID,
                 created_at TIMESTAMPTZ DEFAULT NOW(),
                 updated_at TIMESTAMPTZ
             );

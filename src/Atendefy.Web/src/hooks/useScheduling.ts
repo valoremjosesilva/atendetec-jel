@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '@/api/client';
 import type {
   AppointmentItem,
+  HorafyTestResponse,
   SchedulingConfigRequest,
   SchedulingConfigResponse,
 } from '@/types/api';
@@ -26,6 +27,13 @@ export function useSaveScheduling() {
     mutationFn: (req: SchedulingConfigRequest) =>
       apiClient.put<SchedulingConfigResponse>('/scheduling/config', req).then((r) => r.data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['scheduling-config'] }),
+  });
+}
+
+export function useTestHorafy() {
+  return useMutation({
+    mutationFn: () =>
+      apiClient.post<HorafyTestResponse>('/scheduling/horafy/test').then((r) => r.data),
   });
 }
 

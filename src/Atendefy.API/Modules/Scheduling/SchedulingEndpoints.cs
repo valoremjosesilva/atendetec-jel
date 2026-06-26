@@ -1,4 +1,5 @@
 using Atendefy.API.Infrastructure.Database;
+using Atendefy.API.Modules.Scheduling.Horafy;
 using Atendefy.API.Modules.Scheduling.Models;
 using Atendefy.API.Modules.Tenants;
 using Atendefy.API.Modules.Webhooks.Models;
@@ -73,6 +74,29 @@ public static class SchedulingEndpoints
             }));
         });
 
+        // Testa a conexão com o Horafy usando a config salva (token-exchange + lista serviços).
+        group.MapPost("/horafy/test", async (
+            SchedulingService service,
+            HorafyClient horafy,
+            PublicDbContext publicDb,
+            HttpContext ctx) =>
+        {
+            var (_, schemaName, error) = await ResolveTenantAsync(ctx, publicDb);
+            if (error is not null) return Results.Json(new { error }, statusCode: 401);
+
+            var conn = await service.GetHorafyConnectionAsync(schemaName);
+            if (conn is null)
+                return Results.BadRequest(new
+                {
+                    error = "Configure e salve a URL da API, o slug e a chave do Horafy antes de testar."
+                });
+
+            var result = await horafy.TestConnectionAsync(conn);
+            return result.Ok
+                ? Results.Ok(new { ok = true, servicesCount = result.ServicesCount })
+                : Results.Ok(new { ok = false, error = result.Error });
+        });
+
         return app;
     }
 
@@ -82,6 +106,11 @@ public static class SchedulingEndpoints
         c.BookingUrl,
         c.Enabled,
         c.Instructions,
+        c.ApiBaseUrl,
+        c.TenantSlug,
+        HasApiKey = !string.IsNullOrEmpty(c.ApiKeyEncrypted),
+        c.DefaultServiceId,
+        c.DefaultResourceId,
         WebhookUrl = BuildWebhookUrl(config, c.WebhookToken)
     };
 

@@ -6,5 +6,6 @@ public record InboundMessage(
     string ContactPhone,
     string MessageText,
     string Provider,
-    string AccountId
+    string AccountId,
+    string? ContactName = null
 );
