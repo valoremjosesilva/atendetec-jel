@@ -178,7 +178,7 @@ public class ConversationWorker(
                 && (await bookingFlow.HasActiveFlowAsync(msg.TenantId, msg.ContactPhone)
                     || MentionsScheduling(msg.MessageText)))
             {
-                string flowReply;
+                BookingFlowReply flowReply;
                 try
                 {
                     var aiProv = aiFactory.Create(aiConfig.Provider,
@@ -190,7 +190,7 @@ public class ConversationWorker(
                 catch (Exception ex)
                 {
                     logger.LogWarning(ex, "Erro no fluxo de agendamento Horafy para {Phone}", msg.ContactPhone);
-                    flowReply = "Tive um problema ao acessar a agenda agora. Pode tentar de novo em instantes?";
+                    flowReply = new BookingFlowReply("Tive um problema ao acessar a agenda agora. Pode tentar de novo em instantes?");
                 }
 
                 await DeliverReplyAsync(msg, accountId, waAccount, flowReply);
@@ -309,13 +309,14 @@ public class ConversationWorker(
             System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     // Persiste a troca (sem usar a sessão da IA), atualiza o contato, notifica o painel
-    // e envia a resposta pelo WhatsApp. Usado pelo fluxo de agendamento (Horafy).
+    // e envia a resposta pelo WhatsApp (interativa quando disponível). Usado pelo fluxo de
+    // agendamento (Horafy).
     private async Task DeliverReplyAsync(
-        InboundMessage msg, Guid? accountId, WhatsAppAccount waAccount, string replyText)
+        InboundMessage msg, Guid? accountId, WhatsAppAccount waAccount, BookingFlowReply reply)
     {
         var conversationId = await ConversationService.PersistAsync(
             tenantDbFactory, msg.SchemaName, msg.ContactPhone,
-            msg.MessageText, replyText, tokensUsed: 0, accountId);
+            msg.MessageText, reply.Text, tokensUsed: 0, accountId);
 
         await UpsertContactAsync(msg.SchemaName, msg.ContactPhone, msg.ContactName);
 
@@ -325,7 +326,10 @@ public class ConversationWorker(
         try
         {
             var waProvider = whatsAppFactory.Create(waAccount.Provider, waAccount.ConfigJson!);
-            await waProvider.SendMessageAsync(new OutboundMessage(msg.ContactPhone, replyText));
+            if (reply.Interactive is not null)
+                await waProvider.SendInteractiveAsync(msg.ContactPhone, reply.Interactive);
+            else
+                await waProvider.SendMessageAsync(new OutboundMessage(msg.ContactPhone, reply.Text));
         }
         catch (Exception ex)
         {

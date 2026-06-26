@@ -6,12 +6,14 @@ using Atendefy.API.Infrastructure.Cache;
 using Atendefy.API.Modules.AI;
 using Atendefy.API.Modules.AI.Models;
 using Atendefy.API.Modules.Scheduling.Models;
+using Atendefy.API.Modules.WhatsApp.Models;
 
 namespace Atendefy.API.Modules.Scheduling.Horafy;
 
 /// <summary>
-/// Máquina de estados do agendamento conversacional (texto/numerado) contra o Horafy:
-/// serviço → profissional → dia → horário → confirmação → criação. O estado vive no Redis.
+/// Máquina de estados do agendamento conversacional contra o Horafy:
+/// serviço → profissional → dia → horário → confirmação → criação. Cada passo devolve um
+/// <see cref="BookingFlowReply"/> (texto + interativo). O estado vive no Redis.
 /// </summary>
 public sealed class BookingFlowService(
     HorafyClient horafy,
@@ -19,7 +21,7 @@ public sealed class BookingFlowService(
     ILogger<BookingFlowService> logger)
 {
     private static readonly TimeSpan StateTtl = TimeSpan.FromMinutes(15);
-    private const int MaxOptions = 9;       // listas curtas para WhatsApp
+    private const int MaxOptions = 9;       // listas curtas (WhatsApp lista: até 10 linhas)
     private const int DayHorizon = 14;      // dias à frente para ofertar
 
     private static readonly string[] WeekdaysPt = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
@@ -29,7 +31,7 @@ public sealed class BookingFlowService(
     public async Task<bool> HasActiveFlowAsync(string tenantId, string phone) =>
         await redis.ExistsAsync(Key(tenantId, phone));
 
-    public async Task<string> HandleAsync(
+    public async Task<BookingFlowReply> HandleAsync(
         HorafyConnection conn,
         CalendarConfig calendar,
         string tenantId,
@@ -43,11 +45,10 @@ public sealed class BookingFlowService(
         var text = (userMessage ?? string.Empty).Trim();
         var state = await LoadAsync(tenantId, phone);
 
-        // Cancelamento a qualquer momento.
         if (IsCancel(text))
         {
             await ClearAsync(tenantId, phone);
-            return "Sem problema, cancelei o agendamento. Se quiser, é só me chamar de novo. 🙂";
+            return Reply("Sem problema, cancelei o agendamento. Se quiser, é só me chamar de novo. 🙂");
         }
 
         if (state is null)
@@ -65,17 +66,16 @@ public sealed class BookingFlowService(
     }
 
     // ── Passo 1: serviço ─────────────────────────────────────────────────────────
-    private async Task<string> StartAsync(
+    private async Task<BookingFlowReply> StartAsync(
         HorafyConnection conn, CalendarConfig calendar, string tenantId, string phone, CancellationToken ct)
     {
         var services = await horafy.GetServicesAsync(conn, ct);
         if (services.Count == 0)
         {
             await ClearAsync(tenantId, phone);
-            return "No momento não há serviços disponíveis para agendamento. Posso ajudar em algo mais?";
+            return Reply("No momento não há serviços disponíveis para agendamento. Posso ajudar em algo mais?");
         }
 
-        // Auto-seleção: serviço padrão configurado, ou quando há apenas um.
         var chosen = calendar.DefaultServiceId is { } def
             ? services.FirstOrDefault(s => s.Id == def)
             : null;
@@ -83,31 +83,24 @@ public sealed class BookingFlowService(
 
         if (chosen is not null)
         {
-            var state = new BookingFlowState
-            {
-                Step = BookingStep.Service,
-                ServiceId = chosen.Id,
-                ServiceName = chosen.Name
-            };
-            return await GoToProfessionalAsync(conn, state, tenantId, phone, ct);
+            var s = new BookingFlowState { Step = BookingStep.Service, ServiceId = chosen.Id, ServiceName = chosen.Name };
+            return await GoToProfessionalAsync(conn, s, tenantId, phone, ct);
         }
 
         var options = services.Take(MaxOptions)
             .Select(s => new FlowOption { Id = s.Id.ToString(), Label = $"{s.Name} ({s.DurationMinutes}min)" })
             .ToList();
 
-        var newState = new BookingFlowState { Step = BookingStep.Service, Options = options };
-        await SaveAsync(tenantId, phone, newState);
-        return Render("Vamos agendar! Qual serviço você deseja?", options);
+        await SaveAsync(tenantId, phone, new BookingFlowState { Step = BookingStep.Service, Options = options });
+        return List("Vamos agendar! Qual serviço você deseja?", options);
     }
 
-    private async Task<string> OnServiceAsync(
+    private async Task<BookingFlowReply> OnServiceAsync(
         HorafyConnection conn, BookingFlowState state, string tenantId, string phone,
         string text, IAIProvider ai, string model, CancellationToken ct)
     {
         var opt = await ResolveAsync(text, state.Options, ai, model, ct);
-        if (opt is null)
-            return Render("Não entendi. Qual serviço você deseja?", state.Options);
+        if (opt is null) return List("Não entendi. Qual serviço você deseja?", state.Options);
 
         state.ServiceId = Guid.Parse(opt.Id);
         state.ServiceName = StripDuration(opt.Label);
@@ -115,14 +108,14 @@ public sealed class BookingFlowService(
     }
 
     // ── Passo 2: profissional ────────────────────────────────────────────────────
-    private async Task<string> GoToProfessionalAsync(
+    private async Task<BookingFlowReply> GoToProfessionalAsync(
         HorafyConnection conn, BookingFlowState state, string tenantId, string phone, CancellationToken ct)
     {
         var resources = await horafy.GetResourcesByServiceAsync(conn, state.ServiceId!.Value, ct);
         if (resources.Count == 0)
         {
             await ClearAsync(tenantId, phone);
-            return $"Não encontrei profissionais disponíveis para {state.ServiceName}. Posso ajudar em algo mais?";
+            return Reply($"Não encontrei profissionais disponíveis para {state.ServiceName}. Posso ajudar em algo mais?");
         }
 
         if (resources.Count == 1)
@@ -141,16 +134,15 @@ public sealed class BookingFlowService(
             .ToList();
         state.Step = BookingStep.Professional;
         await SaveAsync(tenantId, phone, state);
-        return Render("Com qual profissional você prefere?", state.Options);
+        return List("Com qual profissional você prefere?", state.Options);
     }
 
-    private async Task<string> OnProfessionalAsync(
+    private async Task<BookingFlowReply> OnProfessionalAsync(
         HorafyConnection conn, BookingFlowState state, string tenantId, string phone,
         string text, IAIProvider ai, string model, CancellationToken ct)
     {
         var opt = await ResolveAsync(text, state.Options, ai, model, ct);
-        if (opt is null)
-            return Render("Não entendi. Com qual profissional você prefere?", state.Options);
+        if (opt is null) return List("Não entendi. Com qual profissional você prefere?", state.Options);
 
         state.ResourceId = Guid.Parse(opt.Id);
         state.ResourceName = opt.Label.Split(" — ")[0];
@@ -158,7 +150,7 @@ public sealed class BookingFlowService(
     }
 
     // ── Passo 3: dia ─────────────────────────────────────────────────────────────
-    private async Task<string> GoToDayAsync(
+    private async Task<BookingFlowReply> GoToDayAsync(
         HorafyConnection conn, BookingFlowState state, string tenantId, string phone, CancellationToken ct)
     {
         var from = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -168,8 +160,8 @@ public sealed class BookingFlowService(
         if (days.Count == 0)
         {
             await ClearAsync(tenantId, phone);
-            return $"Não há dias disponíveis nos próximos {DayHorizon} dias para {state.ResourceName}. " +
-                   "Tente novamente mais tarde ou peça para falar com um atendente.";
+            return Reply($"Não há dias disponíveis nos próximos {DayHorizon} dias para {state.ResourceName}. " +
+                         "Tente novamente mais tarde ou peça para falar com um atendente.");
         }
 
         state.Options = days.Take(MaxOptions)
@@ -177,30 +169,28 @@ public sealed class BookingFlowService(
             .ToList();
         state.Step = BookingStep.Day;
         await SaveAsync(tenantId, phone, state);
-        return Render("Para qual dia?", state.Options);
+        return List("Para qual dia?", state.Options);
     }
 
-    private async Task<string> OnDayAsync(
+    private async Task<BookingFlowReply> OnDayAsync(
         HorafyConnection conn, BookingFlowState state, string tenantId, string phone,
         string text, IAIProvider ai, string model, CancellationToken ct)
     {
         var opt = await ResolveAsync(text, state.Options, ai, model, ct);
-        if (opt is null)
-            return Render("Não entendi. Para qual dia?", state.Options);
+        if (opt is null) return List("Não entendi. Para qual dia?", state.Options);
 
         state.Date = opt.Id;
         return await GoToTimeAsync(conn, state, tenantId, phone, ct);
     }
 
     // ── Passo 4: horário ─────────────────────────────────────────────────────────
-    private async Task<string> GoToTimeAsync(
+    private async Task<BookingFlowReply> GoToTimeAsync(
         HorafyConnection conn, BookingFlowState state, string tenantId, string phone, CancellationToken ct)
     {
         var date = DateOnly.ParseExact(state.Date!, "yyyy-MM-dd", CultureInfo.InvariantCulture);
         var slots = await horafy.GetSlotsAsync(conn, state.ResourceId!.Value, date, state.ServiceId, ct);
 
         if (slots.Count == 0)
-            // Sem horários nesse dia: volta a oferecer dias.
             return await GoToDayAsync(conn, state, tenantId, phone, ct);
 
         state.Options = slots.Take(MaxOptions)
@@ -208,16 +198,15 @@ public sealed class BookingFlowService(
             .ToList();
         state.Step = BookingStep.Time;
         await SaveAsync(tenantId, phone, state);
-        return Render($"Horários livres em {FormatDay(date)}:", state.Options, "Responda com o número do horário.");
+        return List($"Horários livres em {FormatDay(date)}:", state.Options, "Responda com o número do horário.");
     }
 
-    private async Task<string> OnTimeAsync(
+    private async Task<BookingFlowReply> OnTimeAsync(
         HorafyConnection conn, BookingFlowState state, string tenantId, string phone,
         string text, IAIProvider ai, string model, CancellationToken ct)
     {
         var opt = await ResolveAsync(text, state.Options, ai, model, ct);
-        if (opt is null)
-            return Render("Não entendi. Escolha um horário:", state.Options);
+        if (opt is null) return List("Não entendi. Escolha um horário:", state.Options);
 
         state.Slot = opt.Id;
         state.Step = BookingStep.Confirm;
@@ -225,28 +214,30 @@ public sealed class BookingFlowService(
 
         var slot = DateTimeOffset.Parse(state.Slot, CultureInfo.InvariantCulture);
         var date = DateOnly.FromDateTime(slot.DateTime);
-        return $"Confirma o agendamento?\n\n" +
-               $"• Serviço: {state.ServiceName}\n" +
-               $"• Profissional: {state.ResourceName}\n" +
-               $"• Dia: {FormatDay(date)}\n" +
-               $"• Horário: {slot:HH:mm}\n\n" +
-               "Responda *SIM* para confirmar ou *NÃO* para cancelar.";
+        var summary =
+            $"Confirma o agendamento?\n\n" +
+            $"• Serviço: {state.ServiceName}\n" +
+            $"• Profissional: {state.ResourceName}\n" +
+            $"• Dia: {FormatDay(date)}\n" +
+            $"• Horário: {slot:HH:mm}\n\n" +
+            "Responda *SIM* para confirmar ou *NÃO* para cancelar.";
+        return Confirm(summary);
     }
 
     // ── Passo 5: confirmação / criação ───────────────────────────────────────────
-    private async Task<string> OnConfirmAsync(
+    private async Task<BookingFlowReply> OnConfirmAsync(
         HorafyConnection conn, BookingFlowState state, string tenantId, string phone,
         string? contactName, string text, CancellationToken ct)
     {
         if (IsNo(text))
         {
             await ClearAsync(tenantId, phone);
-            return "Tudo bem, não confirmei. Quando quiser agendar, é só me chamar. 🙂";
+            return Reply("Tudo bem, não confirmei. Quando quiser agendar, é só me chamar. 🙂");
         }
         if (!IsYes(text))
         {
-            var slotPreview = DateTimeOffset.Parse(state.Slot!, CultureInfo.InvariantCulture);
-            return $"Responda *SIM* para confirmar o horário das {slotPreview:HH:mm} ou *NÃO* para cancelar.";
+            var preview = DateTimeOffset.Parse(state.Slot!, CultureInfo.InvariantCulture);
+            return Confirm($"Responda *SIM* para confirmar o horário das {preview:HH:mm} ou *NÃO* para cancelar.");
         }
 
         var slot = DateTimeOffset.Parse(state.Slot!, CultureInfo.InvariantCulture);
@@ -268,42 +259,52 @@ public sealed class BookingFlowService(
             await ClearAsync(tenantId, phone);
 
             var date = DateOnly.FromDateTime(slot.DateTime);
-            return result is { AlreadyExisted: true }
+            return Reply(result is { AlreadyExisted: true }
                 ? $"Esse agendamento já estava registrado: {state.ServiceName} com {state.ResourceName} em {FormatDay(date)} às {slot:HH:mm}. ✅"
-                : $"Pronto! Agendamento confirmado: {state.ServiceName} com {state.ResourceName} em {FormatDay(date)} às {slot:HH:mm}. ✅";
+                : $"Pronto! Agendamento confirmado: {state.ServiceName} com {state.ResourceName} em {FormatDay(date)} às {slot:HH:mm}. ✅");
         }
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.Conflict)
         {
             logger.LogInformation("Horário já ocupado ao confirmar para {Phone}; reofertando.", phone);
-            return await GoToTimeAsync(conn, state, tenantId, phone, ct) +
-                   "\n\n(O horário anterior acabou de ser ocupado — escolha outro.)";
+            var reoffer = await GoToTimeAsync(conn, state, tenantId, phone, ct);
+            return reoffer with
+            {
+                Text = reoffer.Text + "\n\n(O horário anterior acabou de ser ocupado — escolha outro.)"
+            };
         }
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Falha ao criar agendamento no Horafy para {Phone}", phone);
-            return "Tive um problema ao confirmar o agendamento agora. Pode tentar novamente em instantes?";
+            return Reply("Tive um problema ao confirmar o agendamento agora. Pode tentar novamente em instantes?");
         }
     }
 
-    // ── Resolução da escolha (número → texto → IA) ───────────────────────────────
+    // ── Resolução da escolha (id → número → texto → IA) ──────────────────────────
     private async Task<FlowOption?> ResolveAsync(
         string text, List<FlowOption> options, IAIProvider ai, string model, CancellationToken ct)
     {
         if (options.Count == 0) return null;
+
+        // 0. Id exato (resposta interativa do WhatsApp devolve o id da opção)
+        var byId = options.FirstOrDefault(o => string.Equals(o.Id, text, StringComparison.OrdinalIgnoreCase));
+        if (byId is not null) return byId;
 
         // 1. Número (1..N)
         var digits = Regex.Match(text, @"\d+");
         if (digits.Success && int.TryParse(digits.Value, out var n) && n >= 1 && n <= options.Count)
             return options[n - 1];
 
-        // 2. Correspondência por texto (rótulo contém a resposta, ou vice-versa)
+        // 2. Correspondência por texto
         var lower = text.ToLowerInvariant();
-        var matches = options
-            .Where(o => o.Label.ToLowerInvariant().Contains(lower) || lower.Contains(o.Label.ToLowerInvariant()))
-            .ToList();
-        if (matches.Count == 1) return matches[0];
+        if (lower.Length >= 2)
+        {
+            var matches = options
+                .Where(o => o.Label.ToLowerInvariant().Contains(lower) || lower.Contains(o.Label.ToLowerInvariant()))
+                .ToList();
+            if (matches.Count == 1) return matches[0];
+        }
 
-        // 3. IA: mapeia texto livre para uma opção (melhor esforço)
+        // 3. IA (melhor esforço)
         try
         {
             var list = string.Join("\n", options.Select((o, i) => $"{i + 1}) {o.Label}"));
@@ -323,7 +324,29 @@ public sealed class BookingFlowService(
         return null;
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────────
+    // ── Construção de respostas ──────────────────────────────────────────────────
+    private static BookingFlowReply Reply(string text) => new(text);
+
+    private static BookingFlowReply List(string header, List<FlowOption> options, string? footer = null)
+    {
+        var fallback = Render(header, options, footer);
+        var interactive = new InteractiveMessage(
+            InteractiveKind.List,
+            Body: header,
+            Options: options.Select(o => new InteractiveOption(o.Id, o.Label)).ToList(),
+            ButtonText: "Ver opções",
+            Footer: footer,
+            FallbackText: fallback);
+        return new BookingFlowReply(fallback, interactive);
+    }
+
+    private static BookingFlowReply Confirm(string body) =>
+        new(body, new InteractiveMessage(
+            InteractiveKind.Buttons,
+            Body: body,
+            Options: [new InteractiveOption("sim", "Sim"), new InteractiveOption("nao", "Não")],
+            FallbackText: body));
+
     private static string Render(string header, List<FlowOption> options, string? footer = null)
     {
         var body = string.Join("\n", options.Select((o, i) => $"{i + 1}. {o.Label}"));

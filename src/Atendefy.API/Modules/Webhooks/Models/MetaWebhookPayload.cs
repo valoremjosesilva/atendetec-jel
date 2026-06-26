@@ -29,9 +29,21 @@ public record MetaMetadata(
 public record MetaMessage(
     [property: JsonPropertyName("from")] string From,
     [property: JsonPropertyName("type")] string Type,
-    [property: JsonPropertyName("text")] MetaMessageText? Text
+    [property: JsonPropertyName("text")] MetaMessageText? Text,
+    [property: JsonPropertyName("interactive")] MetaInteractive? Interactive = null
 );
 
 public record MetaMessageText(
     [property: JsonPropertyName("body")] string Body
+);
+
+public record MetaInteractive(
+    [property: JsonPropertyName("type")] string Type,
+    [property: JsonPropertyName("button_reply")] MetaInteractiveReply? ButtonReply,
+    [property: JsonPropertyName("list_reply")] MetaInteractiveReply? ListReply
+);
+
+public record MetaInteractiveReply(
+    [property: JsonPropertyName("id")] string Id,
+    [property: JsonPropertyName("title")] string? Title
 );

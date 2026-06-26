@@ -53,7 +53,14 @@ public static class WebhookEndpoints
             foreach (var change in entry.Changes.Where(c => c.Field == "messages"))
             foreach (var msg in change.Value.Messages ?? [])
             {
-                if (msg.Type != "text" || msg.Text is null) continue;
+                // Texto comum ou resposta interativa (lista/botão) — usamos o id selecionado.
+                var messageText = msg.Type switch
+                {
+                    "text" => msg.Text?.Body,
+                    "interactive" => msg.Interactive?.ButtonReply?.Id ?? msg.Interactive?.ListReply?.Id,
+                    _ => null
+                };
+                if (string.IsNullOrWhiteSpace(messageText)) continue;
 
                 var route = await publicDb.WebhookRoutes
                     .FirstOrDefaultAsync(r => r.Provider == "meta"
@@ -67,7 +74,7 @@ public static class WebhookEndpoints
                     TenantId: tenant.Id.ToString(),
                     SchemaName: tenant.SchemaName,
                     ContactPhone: msg.From,
-                    MessageText: msg.Text.Body,
+                    MessageText: messageText,
                     Provider: "meta",
                     AccountId: route.AccountId.ToString()
                 ));

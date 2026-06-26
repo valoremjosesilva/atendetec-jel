@@ -1,4 +1,12 @@
+using Atendefy.API.Modules.WhatsApp.Models;
+
 namespace Atendefy.API.Modules.Scheduling.Horafy;
+
+/// <summary>
+/// Resposta do fluxo: texto (sempre, para histórico/painel e fallback) e, opcionalmente,
+/// uma mensagem interativa (lista/botões) para canais que suportam.
+/// </summary>
+public sealed record BookingFlowReply(string Text, InteractiveMessage? Interactive = null);
 
 /// <summary>Passos do fluxo guiado de agendamento.</summary>
 public static class BookingStep
