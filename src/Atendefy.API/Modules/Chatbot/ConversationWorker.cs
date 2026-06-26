@@ -4,6 +4,7 @@ using Atendefy.API.Infrastructure.RateLimiting;
 using Atendefy.API.Modules.AI;
 using Atendefy.API.Modules.AI.Models;
 using Atendefy.API.Modules.Chatbot.Models;
+using Atendefy.API.Modules.Scheduling.Horafy;
 using Atendefy.API.Modules.Scheduling.Models;
 using Atendefy.API.Modules.Tenants;
 using Atendefy.API.Modules.WhatsApp;
@@ -27,6 +28,7 @@ public class ConversationWorker(
     IConversationEventEmitter emitter,
     IServiceScopeFactory scopeFactory,
     Atendefy.API.Infrastructure.Cache.RedisService redis,
+    BookingFlowService bookingFlow,
     ILogger<ConversationWorker> logger) : BackgroundService
 {
     private const string StreamName = "messages.inbound";
@@ -153,6 +155,48 @@ public class ConversationWorker(
         CalendarConfig? calendar = null;
         try { calendar = await tenantDb.CalendarConfigs.FirstOrDefaultAsync(); }
         catch (Exception ex) { logger.LogWarning(ex, "calendar_configs indisponível para {Schema} — agendamento desativado", msg.SchemaName); }
+
+        // Agendamento via API (Horafy): assume a conversa quando há um fluxo ativo
+        // ou quando o cliente demonstra intenção de agendar. Bypassa a IA genérica.
+        if (limits.SchedulingEnabled && calendar is { Provider: "horafy", Enabled: true }
+            && !string.IsNullOrEmpty(calendar.ApiBaseUrl) && !string.IsNullOrEmpty(calendar.TenantSlug)
+            && !string.IsNullOrEmpty(calendar.ApiKeyEncrypted))
+        {
+            HorafyConnection? horafyConn = null;
+            try
+            {
+                horafyConn = new HorafyConnection(
+                    calendar.ApiBaseUrl!, calendar.TenantSlug!,
+                    AesEncryption.Decrypt(calendar.ApiKeyEncrypted!, encryptionKey));
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Falha ao montar conexão Horafy para {Schema}", msg.SchemaName);
+            }
+
+            if (horafyConn is not null
+                && (await bookingFlow.HasActiveFlowAsync(msg.TenantId, msg.ContactPhone)
+                    || MentionsScheduling(msg.MessageText)))
+            {
+                string flowReply;
+                try
+                {
+                    var aiProv = aiFactory.Create(aiConfig.Provider,
+                        AesEncryption.Decrypt(aiConfig.ApiKeyEncrypted!, encryptionKey));
+                    flowReply = await bookingFlow.HandleAsync(
+                        horafyConn, calendar, msg.TenantId, msg.ContactPhone, msg.ContactName,
+                        msg.MessageText, aiProv, aiConfig.Model ?? "gpt-4o-mini");
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "Erro no fluxo de agendamento Horafy para {Phone}", msg.ContactPhone);
+                    flowReply = "Tive um problema ao acessar a agenda agora. Pode tentar de novo em instantes?";
+                }
+
+                await DeliverReplyAsync(msg, accountId, waAccount, flowReply);
+                return;
+            }
+        }
         var schedulingOn = limits.SchedulingEnabled
             && calendar is { Enabled: true } && !string.IsNullOrWhiteSpace(calendar.BookingUrl);
         if (schedulingOn)
@@ -263,6 +307,31 @@ public class ConversationWorker(
         System.Text.RegularExpressions.Regex.IsMatch(
             text, @"agend|hor[áa]rio|marcar|remarcar|consulta|disponibilidade|reservar",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    // Persiste a troca (sem usar a sessão da IA), atualiza o contato, notifica o painel
+    // e envia a resposta pelo WhatsApp. Usado pelo fluxo de agendamento (Horafy).
+    private async Task DeliverReplyAsync(
+        InboundMessage msg, Guid? accountId, WhatsAppAccount waAccount, string replyText)
+    {
+        var conversationId = await ConversationService.PersistAsync(
+            tenantDbFactory, msg.SchemaName, msg.ContactPhone,
+            msg.MessageText, replyText, tokensUsed: 0, accountId);
+
+        await UpsertContactAsync(msg.SchemaName, msg.ContactPhone, msg.ContactName);
+
+        emitter.Emit(msg.TenantId, JsonSerializer.Serialize(
+            new { type = "message_added", conversationId }));
+
+        try
+        {
+            var waProvider = whatsAppFactory.Create(waAccount.Provider, waAccount.ConfigJson!);
+            await waProvider.SendMessageAsync(new OutboundMessage(msg.ContactPhone, replyText));
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Falha ao enviar resposta WhatsApp para {Phone} (conversa salva)", msg.ContactPhone);
+        }
+    }
 
     private async Task UpsertContactAsync(string schemaName, string phone, string? name = null)
     {

@@ -123,6 +123,7 @@ builder.Services.AddScoped(sp =>
     new SchedulingService(sp.GetRequiredService<TenantDbContextFactory>(), encryptionKey));
 builder.Services.AddHttpClient("horafy");
 builder.Services.AddSingleton<HorafyClient>();
+builder.Services.AddSingleton<BookingFlowService>();
 
 // Webhooks
 builder.Services.AddSingleton(new MetaWebhookValidator(metaAppSecret));
@@ -142,6 +143,7 @@ builder.Services.AddHostedService(sp => new ConversationWorker(
     sp.GetRequiredService<IConversationEventEmitter>(),
     sp.GetRequiredService<IServiceScopeFactory>(),
     sp.GetRequiredService<RedisService>(),
+    sp.GetRequiredService<BookingFlowService>(),
     sp.GetRequiredService<ILogger<ConversationWorker>>()));
 
 // Billing
