@@ -45,4 +45,32 @@ public class OpenAIProviderTests
         body.Should().Contain("system");
         body.Should().Contain("Prompt do sistema.");
     }
+
+    [Fact]
+    public async Task CompleteAsync_WhenChoicesArrayIsEmpty_ReturnsEmptyContent()
+    {
+        var responseJson = """{"choices":[],"usage":{"completion_tokens":0}}""";
+        var handler = MockHttpMessageHandler.ReturnsJson(responseJson);
+        var provider = new OpenAIProvider(new HttpClient(handler), "sk-test");
+
+        var result = await provider.CompleteAsync(new AICompletionRequest(
+            SystemPrompt: "Prompt.", Messages: [new ChatMessage("user", "oi")], Model: "gpt-4o-mini"));
+
+        result.Content.Should().BeEmpty();
+        result.TokensUsed.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task CompleteAsync_WhenResponseIsMissingExpectedFields_ReturnsEmptyContent()
+    {
+        var responseJson = """{"error":{"message":"Rate limit exceeded"}}""";
+        var handler = MockHttpMessageHandler.ReturnsJson(responseJson);
+        var provider = new OpenAIProvider(new HttpClient(handler), "sk-test");
+
+        var result = await provider.CompleteAsync(new AICompletionRequest(
+            SystemPrompt: "Prompt.", Messages: [new ChatMessage("user", "oi")], Model: "gpt-4o-mini"));
+
+        result.Content.Should().BeEmpty();
+        result.TokensUsed.Should().Be(0);
+    }
 }
