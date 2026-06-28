@@ -232,4 +232,104 @@ public class BillingServiceTests
         var updatedSub = await db.Subscriptions.FindAsync(sub.Id);
         updatedSub!.Status.Should().Be("cancelled");
     }
+
+    [Fact]
+    public async Task ProcessPaymentEvent_WhenAlreadyPaid_DoesNotChangePaidAt()
+    {
+        var db = CreateDb();
+        var tenant = new Tenant { Name = "Paid Corp", Subdomain = "paid-corp" };
+        var plan = new Plan { Name = "Starter", PriceMonthly = 99m, LimitsJson = "{}" };
+        db.Tenants.Add(tenant);
+        db.Plans.Add(plan);
+
+        var sub = new Subscription
+        {
+            TenantId = tenant.Id, PlanId = plan.Id,
+            Status = "active", Provider = "asaas", BillingCycle = "monthly"
+        };
+        db.Subscriptions.Add(sub);
+
+        var originalPaidAt = DateTime.UtcNow.AddHours(-1);
+        var invoice = new Invoice
+        {
+            SubscriptionId = sub.Id, TenantId = tenant.Id, Amount = 99m,
+            Status = "paid", Provider = "asaas", BillingType = "BOLETO",
+            ExternalId = "pay_already_paid", DueDate = DateTime.UtcNow.AddDays(1),
+            PaidAt = originalPaidAt
+        };
+        db.Invoices.Add(invoice);
+        await db.SaveChangesAsync();
+
+        var svc = new BillingService(db, Substitute.For<IBillingGatewayFactory>());
+        await svc.ProcessPaymentEventAsync(new WebhookEvent("pay_already_paid", IsPaid: true, IsOverdue: false, IsCancelled: false));
+
+        var updated = await db.Invoices.FindAsync(invoice.Id);
+        updated!.PaidAt.Should().BeCloseTo(originalPaidAt, TimeSpan.FromSeconds(1));
+    }
+
+    [Fact]
+    public async Task ProcessPaymentEvent_WhenOverdueArrivesAfterPaid_DoesNotDowngradeSubscription()
+    {
+        var db = CreateDb();
+        var tenant = new Tenant { Name = "Paid Then Overdue", Subdomain = "paid-then-overdue" };
+        var plan = new Plan { Name = "Starter", PriceMonthly = 99m, LimitsJson = "{}" };
+        db.Tenants.Add(tenant);
+        db.Plans.Add(plan);
+
+        var sub = new Subscription
+        {
+            TenantId = tenant.Id, PlanId = plan.Id,
+            Status = "active", Provider = "asaas", BillingCycle = "monthly"
+        };
+        db.Subscriptions.Add(sub);
+
+        var invoice = new Invoice
+        {
+            SubscriptionId = sub.Id, TenantId = tenant.Id, Amount = 99m,
+            Status = "paid", Provider = "asaas", BillingType = "BOLETO",
+            ExternalId = "pay_paid_then_overdue", DueDate = DateTime.UtcNow.AddDays(-1),
+            PaidAt = DateTime.UtcNow.AddDays(-2)
+        };
+        db.Invoices.Add(invoice);
+        await db.SaveChangesAsync();
+
+        var svc = new BillingService(db, Substitute.For<IBillingGatewayFactory>());
+        await svc.ProcessPaymentEventAsync(new WebhookEvent("pay_paid_then_overdue", IsPaid: false, IsOverdue: true, IsCancelled: false));
+
+        var updatedSub = await db.Subscriptions.FindAsync(sub.Id);
+        updatedSub!.Status.Should().Be("active");
+    }
+
+    [Fact]
+    public async Task ProcessPaymentEvent_WhenAlreadyCancelled_DoesNotReprocess()
+    {
+        var db = CreateDb();
+        var tenant = new Tenant { Name = "Already Cancelled", Subdomain = "already-cancelled" };
+        var plan = new Plan { Name = "Starter", PriceMonthly = 99m, LimitsJson = "{}" };
+        db.Tenants.Add(tenant);
+        db.Plans.Add(plan);
+
+        var sub = new Subscription
+        {
+            TenantId = tenant.Id, PlanId = plan.Id,
+            Status = "cancelled", Provider = "asaas", BillingCycle = "monthly"
+        };
+        db.Subscriptions.Add(sub);
+
+        var invoice = new Invoice
+        {
+            SubscriptionId = sub.Id, TenantId = tenant.Id, Amount = 99m,
+            Status = "cancelled", Provider = "asaas", BillingType = "BOLETO",
+            ExternalId = "pay_replay_cancelled", DueDate = DateTime.UtcNow.AddDays(1)
+        };
+        db.Invoices.Add(invoice);
+        var beforeUpdate = invoice.UpdatedAt;
+        await db.SaveChangesAsync();
+
+        var svc = new BillingService(db, Substitute.For<IBillingGatewayFactory>());
+        await svc.ProcessPaymentEventAsync(new WebhookEvent("pay_replay_cancelled", IsPaid: false, IsOverdue: false, IsCancelled: true));
+
+        var updatedSub = await db.Subscriptions.FindAsync(sub.Id);
+        updatedSub!.Status.Should().Be("cancelled");
+    }
 }
