@@ -1,3 +1,4 @@
+using Atendefy.API.Infrastructure.Cache;
 using Atendefy.API.Infrastructure.Database;
 using Atendefy.API.Infrastructure.Messaging;
 using Atendefy.API.Modules.Chatbot;
@@ -35,7 +36,8 @@ public static class WebhookEndpoints
             HttpContext ctx,
             PublicDbContext publicDb,
             RedisStreamService streams,
-            MetaWebhookValidator validator) =>
+            MetaWebhookValidator validator,
+            RedisService redis) =>
         {
             ctx.Request.EnableBuffering();
             var body = await ReadAllBytesAsync(ctx.Request.Body);
@@ -63,6 +65,11 @@ public static class WebhookEndpoints
                 };
                 if (string.IsNullOrWhiteSpace(messageText)) continue;
 
+                // Deduplicar: Meta replica webhooks em retry. Pular se já processado.
+                if (!string.IsNullOrEmpty(msg.Id)
+                    && await IsDuplicateAsync(redis, "meta", msg.Id))
+                    continue;
+
                 var route = await publicDb.WebhookRoutes
                     .FirstOrDefaultAsync(r => r.Provider == "meta"
                         && r.LookupKey == change.Value.Metadata.PhoneNumberId);
@@ -89,7 +96,8 @@ public static class WebhookEndpoints
             HttpContext ctx,
             RedisStreamService streams,
             EvolutionWebhookValidator evolutionValidator,
-            [FromQuery] string? token) =>
+            [FromQuery] string? token,
+            RedisService redis) =>
         {
             if (string.IsNullOrEmpty(token))
                 return Results.Forbid();
@@ -103,6 +111,11 @@ public static class WebhookEndpoints
 
             var messageText = payload.Data.Message?.Conversation;
             if (string.IsNullOrWhiteSpace(messageText)) return Results.Ok();
+
+            // Deduplicar: Evolution pode reenviar o mesmo webhook após restart.
+            if (!string.IsNullOrEmpty(payload.Data.Key.Id)
+                && await IsDuplicateAsync(redis, "evolution", payload.Data.Key.Id))
+                return Results.Ok();
 
             var publicDb = ctx.RequestServices.GetRequiredService<PublicDbContext>();
             var tenant = await publicDb.Tenants.FindAsync(route.TenantId);
@@ -231,4 +244,13 @@ public static class WebhookEndpoints
             ["account_id"]    = msg.AccountId,
             ["contact_name"]  = msg.ContactName ?? string.Empty
         });
+
+    private static async Task<bool> IsDuplicateAsync(
+        RedisService redis, string provider, string messageId)
+    {
+        var key = $"webhook:dedup:{provider}:{messageId}";
+        if (await redis.ExistsAsync(key)) return true;
+        await redis.SetAsync(key, "1", TimeSpan.FromHours(24));
+        return false;
+    }
 }
