@@ -67,10 +67,14 @@ public static class ConversationEndpoints
             Guid id,
             TenantDbContextFactory dbFactory,
             PublicDbContext publicDb,
-            HttpContext ctx) =>
+            HttpContext ctx,
+            [FromQuery] int limit = 0,
+            [FromQuery] DateTime? before = null) =>
         {
             var (_, schemaName, error) = await ResolveTenantAsync(ctx, publicDb);
             if (error is not null) return Results.Json(new { error }, statusCode: 401);
+
+            if (limit <= 0 || limit > 100) limit = 50;
 
             await using var db = dbFactory.Create(schemaName);
 
@@ -78,11 +82,18 @@ public static class ConversationEndpoints
                 .FirstOrDefaultAsync(c => c.Id == id);
             if (conversation is null) return Results.NotFound();
 
-            var messages = await db.Messages
-                .Where(m => m.ConversationId == id)
-                .OrderBy(m => m.CreatedAt)
+            var query = db.Messages.Where(m => m.ConversationId == id);
+            if (before.HasValue)
+                query = query.Where(m => m.CreatedAt < before.Value);
+
+            var raw = await query
+                .OrderByDescending(m => m.CreatedAt)
+                .Take(limit + 1)
                 .Select(m => new { m.Id, m.Role, m.Content, m.TokensUsed, m.CreatedAt })
                 .ToListAsync();
+
+            var hasMore = raw.Count > limit;
+            var messages = raw.Take(limit).OrderBy(m => m.CreatedAt).ToList();
 
             return Results.Ok(new
             {
@@ -93,7 +104,8 @@ public static class ConversationEndpoints
                 conversation.BotPaused,
                 conversation.IsResolved,
                 conversation.ResolvedAt,
-                messages
+                messages,
+                hasMore
             });
         });
 
