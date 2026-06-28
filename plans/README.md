@@ -14,7 +14,7 @@ a coluna de status ao terminar.
 | [003](003-webhook-deduplication.md)    | Deduplicar mensagens de webhook        | P1 | M | —   | TODO |
 | [004](004-billing-webhook-idempotency.md) | Cobrança: webhook idempotente       | P1 | M | —   | TODO |
 | [005](005-message-history-pagination.md)  | Paginar histórico de mensagens      | P1 | M | —   | TODO |
-| [006](006-frontend-ci-job.md)          | CI: job de build do frontend           | P1 | M | —   | TODO |
+| [006](006-frontend-ci-job.md)          | CI: job de build do frontend           | P1 | M | —   | DONE |
 | [007](007-tenant-isolation-tests.md)   | Testes de isolamento entre tenants     | P1 | P | —   | TODO |
 | [008](008-claude-md.md)               | Criar CLAUDE.md                         | P2 | P | —   | TODO |
 
