@@ -80,6 +80,9 @@ public class BillingService(PublicDbContext db, IBillingGatewayFactory gatewayFa
 
         if (evt.IsPaid)
         {
+            // Guard: já foi processado como pago; replay seguro de ignorar
+            if (invoice.Status == AppConstants.InvoiceStatus.Paid) return;
+
             invoice.Status = AppConstants.InvoiceStatus.Paid;
             invoice.PaidAt = DateTime.UtcNow;
             subscription.Status = AppConstants.SubscriptionStatus.Active;
@@ -94,13 +97,26 @@ public class BillingService(PublicDbContext db, IBillingGatewayFactory gatewayFa
         }
         else if (evt.IsOverdue)
         {
+            // Guard: não rebaixar assinatura já paga ou cancelada
+            if (invoice.Status is AppConstants.InvoiceStatus.Paid
+                               or AppConstants.InvoiceStatus.Cancelled
+                               or AppConstants.InvoiceStatus.Overdue) return;
+
             invoice.Status = AppConstants.InvoiceStatus.Overdue;
             subscription.Status = AppConstants.SubscriptionStatus.PastDue;
         }
         else if (evt.IsCancelled)
         {
+            // Guard: já cancelado; replay seguro de ignorar
+            if (invoice.Status == AppConstants.InvoiceStatus.Cancelled) return;
+
             invoice.Status = AppConstants.InvoiceStatus.Cancelled;
             subscription.Status = AppConstants.SubscriptionStatus.Cancelled;
+        }
+        else
+        {
+            // Evento desconhecido — não fazer nada
+            return;
         }
 
         invoice.UpdatedAt = DateTime.UtcNow;
