@@ -16,14 +16,18 @@ export function useConversations(
   });
 }
 
-export function useConversationMessages(id: string | null) {
+export function useConversationMessages(id: string | null, before?: string) {
   return useQuery({
-    queryKey: ['conversations', id, 'messages'],
-    queryFn: () =>
-      apiClient
-        .get<ConversationDetail>(`/conversations/${id}/messages`)
-        .then((r) => r.data),
+    queryKey: ['conversations', id, 'messages', before],
+    queryFn: () => {
+      const params: Record<string, string> = { limit: '50' };
+      if (before) params.before = before;
+      return apiClient
+        .get<ConversationDetail>(`/conversations/${id}/messages`, { params })
+        .then((r) => r.data);
+    },
     enabled: !!id,
+    staleTime: 30_000,
   });
 }
 
