@@ -9,9 +9,9 @@ a coluna de status ao terminar.
 
 | Plano | Título                                          | Prioridade | Esforço | Depende de | Status |
 |-------|-------------------------------------------------|------------|---------|------------|--------|
-| [001](001-ai-provider-safe-parsing.md) | Provider de IA: parsing seguro de JSON | P1 | P | —   | TODO |
-| [002](002-aiconfig-redis-cache.md)     | Cachear AiConfig no Redis              | P1 | P | —   | TODO |
-| [003](003-webhook-deduplication.md)    | Deduplicar mensagens de webhook        | P1 | M | —   | TODO |
+| [001](001-ai-provider-safe-parsing.md) | Provider de IA: parsing seguro de JSON | P1 | P | —   | DONE |
+| [002](002-aiconfig-redis-cache.md)     | Cachear AiConfig no Redis              | P1 | P | —   | DONE |
+| [003](003-webhook-deduplication.md)    | Deduplicar mensagens de webhook        | P1 | M | —   | DONE |
 | [004](004-billing-webhook-idempotency.md) | Cobrança: webhook idempotente       | P1 | M | —   | TODO |
 | [005](005-message-history-pagination.md)  | Paginar histórico de mensagens      | P1 | M | —   | TODO |
 | [006](006-frontend-ci-job.md)          | CI: job de build do frontend           | P1 | M | —   | TODO |
