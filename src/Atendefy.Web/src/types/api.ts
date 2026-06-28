@@ -183,6 +183,7 @@ export interface ConversationDetail {
   isResolved: boolean;
   resolvedAt?: string;
   messages: ConversationMessage[];
+  hasMore: boolean;
 }
 
 export interface ConversationsListResponse {

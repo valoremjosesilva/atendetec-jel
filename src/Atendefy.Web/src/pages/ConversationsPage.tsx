@@ -31,11 +31,12 @@ export default function ConversationsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('open');
   const [messageText, setMessageText] = useState('');
   const [showQuickReplies, setShowQuickReplies] = useState(false);
+  const [beforeCursor, setBeforeCursor] = useState<string | undefined>(undefined);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { data, isLoading, isError } = useConversations(1, 20, statusFilter);
   const { data: detail, isLoading: loadingMessages, isError: messagesError } =
-    useConversationMessages(selectedId);
+    useConversationMessages(selectedId, beforeCursor);
   const { data: quickRepliesData } = useQuickReplies();
 
   const takeover = useTakeoverConversation();
@@ -87,6 +88,10 @@ export default function ConversationsPage() {
       if (retryTimeout) clearTimeout(retryTimeout);
     };
   }, [queryClient]);
+
+  useEffect(() => {
+    setBeforeCursor(undefined);
+  }, [selectedId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -291,6 +296,18 @@ export default function ConversationsPage() {
               )}
               {messagesError && (
                 <p className="text-sm text-center text-destructive py-4">Erro ao carregar mensagens.</p>
+              )}
+              {detail?.hasMore && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const oldest = detail.messages[0]?.createdAt;
+                    if (oldest) setBeforeCursor(oldest);
+                  }}
+                  className="w-full py-2 text-sm text-muted-foreground hover:text-foreground"
+                >
+                  Carregar mensagens anteriores
+                </button>
               )}
               {detail?.messages.map((msg) => (
                 <div
