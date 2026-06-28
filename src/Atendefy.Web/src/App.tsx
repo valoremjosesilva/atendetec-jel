@@ -3,6 +3,7 @@ import AppLayout from '@/components/layout/AppLayout';
 import PrivateRoute from '@/components/PrivateRoute';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
+import VerifyEmailPage from '@/pages/VerifyEmailPage';
 import DashboardPage from '@/pages/DashboardPage';
 import WhatsAppPage from '@/pages/WhatsAppPage';
 import AIConfigPage from '@/pages/AIConfigPage';
@@ -21,6 +22,7 @@ import FeatureGuard from '@/components/FeatureGuard';
 const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
   { path: '/register', element: <RegisterPage /> },
+  { path: '/verify-email', element: <VerifyEmailPage /> },
   { path: '/admin/login', element: <AdminLoginPage /> },
   {
     element: <AdminLayout />,

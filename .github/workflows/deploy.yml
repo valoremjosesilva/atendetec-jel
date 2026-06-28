@@ -76,6 +76,8 @@ jobs:
           context: src/Atendefy.Web
           file: src/Atendefy.Web/Dockerfile
           push: true
+          build-args: |
+            VITE_TURNSTILE_SITE_KEY=${{ vars.VITE_TURNSTILE_SITE_KEY }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
 

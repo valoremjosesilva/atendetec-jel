@@ -38,7 +38,9 @@ public class TenantServiceTests
         tenant!.Name.Should().Be("Clínica ABC");
         var owner = await db.TenantUsers.FirstOrDefaultAsync(u => u.TenantId == tenant.Id);
         owner!.Role.Should().Be("Owner");
-        await provisioner.Received(1).ProvisionSchemaAsync(Arg.Any<string>());
+        owner.EmailVerified.Should().BeFalse();
+        // O provisionamento agora acontece só na aprovação (ActivateAsync), não no cadastro.
+        await provisioner.DidNotReceive().ProvisionSchemaAsync(Arg.Any<string>());
     }
 
     [Fact]
@@ -55,18 +57,60 @@ public class TenantServiceTests
     }
 
     [Fact]
-    public async Task Activate_ShouldFlipPendingToActive()
+    public async Task Activate_ShouldProvisionSchemaAndFlipPendingToActive()
     {
         var db = CreateDb();
         db.Tenants.Add(new Tenant { Name = "Co", Subdomain = "co", Status = "pending" });
         await db.SaveChangesAsync();
-        var sut = CreateService(db, Substitute.For<ITenantProvisioner>());
+        var provisioner = Substitute.For<ITenantProvisioner>();
+        var sut = CreateService(db, provisioner);
 
         var result = await sut.ActivateAsync("co");
 
         result.IsSuccess.Should().BeTrue();
         var tenant = await db.Tenants.FirstAsync(t => t.Subdomain == "co");
         tenant.Status.Should().Be("active");
+        await provisioner.Received(1).ProvisionSchemaAsync(Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task Activate_WithUnverifiedOwnerEmail_ShouldFailAndNotProvision()
+    {
+        var db = CreateDb();
+        var tenant = new Tenant { Name = "Co", Subdomain = "co", Status = "pending" };
+        db.Tenants.Add(tenant);
+        db.TenantUsers.Add(new TenantUser
+        {
+            TenantId = tenant.Id, Email = "o@co.com", PasswordHash = "x",
+            Role = "Owner", Name = "O", EmailVerified = false
+        });
+        await db.SaveChangesAsync();
+        var provisioner = Substitute.For<ITenantProvisioner>();
+        var sut = CreateService(db, provisioner);
+
+        var result = await sut.ActivateAsync("co");
+
+        result.IsSuccess.Should().BeFalse();
+        (await db.Tenants.FirstAsync(t => t.Subdomain == "co")).Status.Should().Be("pending");
+        await provisioner.DidNotReceive().ProvisionSchemaAsync(Arg.Any<string>());
+    }
+
+    [Fact]
+    public async Task Activate_WhenProvisionerThrows_ShouldFailAndStayPending()
+    {
+        var db = CreateDb();
+        db.Tenants.Add(new Tenant { Name = "Co", Subdomain = "co", Status = "pending" });
+        await db.SaveChangesAsync();
+        var provisioner = Substitute.For<ITenantProvisioner>();
+        provisioner.ProvisionSchemaAsync(Arg.Any<string>())
+            .ThrowsAsync(new Exception("Postgres DDL error"));
+        var sut = CreateService(db, provisioner);
+
+        var result = await sut.ActivateAsync("co");
+
+        result.IsSuccess.Should().BeFalse();
+        result.Error.Should().Contain("provisionar");
+        (await db.Tenants.FirstAsync(t => t.Subdomain == "co")).Status.Should().Be("pending");
     }
 
     [Fact]
@@ -121,24 +165,6 @@ public class TenantServiceTests
             .RegisterAsync(new RegisterTenantRequest("Other", "existing", "User", "u@t.com", "P@ss1"));
 
         await provisioner.DidNotReceive().ProvisionSchemaAsync(Arg.Any<string>());
-    }
-
-    [Fact]
-    public async Task Register_WhenProvisionerThrows_ShouldReturnFailAndRemoveTenant()
-    {
-        var db = CreateDb();
-        var provisioner = Substitute.For<ITenantProvisioner>();
-        provisioner.ProvisionSchemaAsync(Arg.Any<string>())
-            .ThrowsAsync(new Exception("Postgres DDL error"));
-
-        var result = await CreateService(db, provisioner)
-            .RegisterAsync(new RegisterTenantRequest(
-                "Test Co", "testco", "Owner", "owner@test.com", "P@ss123"));
-
-        result.IsSuccess.Should().BeFalse();
-        result.Error.Should().Contain("provisionar");
-        var tenant = await db.Tenants.IgnoreQueryFilters().FirstOrDefaultAsync(t => t.Subdomain == "testco");
-        tenant.Should().BeNull();
     }
 
     [Fact]

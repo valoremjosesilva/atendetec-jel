@@ -56,9 +56,16 @@ public class AdminService(PublicDbContext db)
         // join manual com Plans (PlanId é Guid? sem FK navigation no modelo)
         var tenants = await db.Tenants.OrderBy(t => t.Name).ToListAsync();
         var plans = await db.Plans.ToDictionaryAsync(p => p.Id, p => p.Name);
+        // EmailVerified do dono de cada tenant (para o superadmin ver antes de aprovar).
+        var ownerVerified = await db.TenantUsers
+            .Where(u => u.Role == "Owner")
+            .GroupBy(u => u.TenantId)
+            .Select(g => new { TenantId = g.Key, Verified = g.Max(u => u.EmailVerified) })
+            .ToDictionaryAsync(x => x.TenantId, x => x.Verified);
         return tenants.Select(t => new AdminTenantDto(
             t.Id, t.Subdomain, t.Name, t.Status, t.PlanId,
             t.PlanId is Guid pid && plans.TryGetValue(pid, out var n) ? n : null,
+            ownerVerified.TryGetValue(t.Id, out var v) && v,
             t.CreatedAt)).ToList();
     }
 
@@ -122,6 +129,7 @@ public record AdminTenantDto(
     string Status,
     Guid? PlanId,
     string? PlanName,
+    bool EmailVerified,
     DateTime CreatedAt);
 
 public record AssignPlanRequest(Guid PlanId);

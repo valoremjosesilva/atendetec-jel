@@ -7,7 +7,8 @@ namespace Atendefy.Tests.Scheduling;
 
 public class SchedulingServiceTests
 {
-    private static SchedulingService Create() => new(new InMemoryTenantDbContextFactory());
+    private static SchedulingService Create() =>
+        new(new InMemoryTenantDbContextFactory(), "test_encryption_key_min_32_chars_long!!");
     private static string NewSchema() => "tenant_" + Guid.NewGuid().ToString("N");
 
     [Fact]

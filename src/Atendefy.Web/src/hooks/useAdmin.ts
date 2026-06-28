@@ -23,6 +23,7 @@ export interface AdminTenant {
   status: string;
   planId: string | null;
   planName: string | null;
+  emailVerified: boolean;
   createdAt: string;
 }
 

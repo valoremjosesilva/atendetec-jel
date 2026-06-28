@@ -5,5 +5,10 @@ public record RegisterTenantRequest(
     string Subdomain,
     string OwnerName,
     string OwnerEmail,
-    string OwnerPassword
+    string OwnerPassword,
+    string? CaptchaToken = null
 );
+
+public record VerifyEmailRequest(string Token);
+
+public record ResendVerificationRequest(string Subdomain, string Email);

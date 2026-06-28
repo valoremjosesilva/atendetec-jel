@@ -4,17 +4,19 @@ namespace Atendefy.API.Infrastructure.RateLimiting;
 
 public class TenantRateLimiter(RedisService redis, int limit = 60)
 {
-    public async Task<bool> IsAllowedAsync(string tenantId, string scope = "msg")
+    public Task<bool> IsAllowedAsync(string tenantId, string scope = "msg") =>
+        IsAllowedAsync(tenantId, scope, limit);
+
+    // Overload com limite por chamada (ex.: cadastro anônimo por IP usa um limite bem mais estrito
+    // que o de mensagens). Mesma janela de 1 minuto.
+    public async Task<bool> IsAllowedAsync(string key, string scope, int customLimit)
     {
         var minute = DateTime.UtcNow.ToString("yyyyMMddHHmm");
-        var key = $"ratelimit:{scope}:{tenantId}:{minute}";
+        var redisKey = $"ratelimit:{scope}:{key}:{minute}";
 
-        await redis.IncrementAsync(key);
-        var count = await redis.GetCounterAsync(key);
+        await redis.IncrementWithTtlAsync(redisKey, TimeSpan.FromMinutes(2));
+        var count = await redis.GetCounterAsync(redisKey);
 
-        if (count == 1)
-            await redis.SetAsync($"{key}:ttl", "1", TimeSpan.FromMinutes(2));
-
-        return count <= limit;
+        return count <= customLimit;
     }
 }

@@ -48,6 +48,9 @@ function TenantRow({ tenant }: { tenant: AdminTenant }) {
         </div>
 
         <Badge variant={statusVariant(tenant.status)}>{tenant.status}</Badge>
+        <Badge variant={tenant.emailVerified ? 'default' : 'outline'}>
+          {tenant.emailVerified ? 'e-mail ✓' : 'e-mail pendente'}
+        </Badge>
 
         <div className="w-48">
           <Select

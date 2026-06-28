@@ -48,6 +48,7 @@ var asaasWebhook  = builder.Configuration["Asaas:WebhookToken"] ?? string.Empty;
 var asaasSandbox  = builder.Configuration.GetValue<bool>("Asaas:Sandbox", true);
 var stripeKey     = builder.Configuration["Stripe:SecretKey"] ?? string.Empty;
 var stripeWebhook = builder.Configuration["Stripe:WebhookSecret"] ?? string.Empty;
+var turnstileSecret = builder.Configuration["Turnstile:SecretKey"] ?? string.Empty;
 
 // Database
 builder.Services.AddDbContext<PublicDbContext>(opt => opt.UseNpgsql(connStr));
@@ -67,6 +68,20 @@ builder.Services.AddSingleton(new TenantResolver(baseDomain));
 builder.Services.AddScoped<TenantService>();
 builder.Services.AddScoped<EntitlementsService>();
 builder.Services.AddScoped<AdminService>();
+
+// Anti-abuso do cadastro: captcha (Turnstile) + e-mail de verificação
+builder.Services.AddHttpClient("turnstile");
+builder.Services.AddSingleton(sp => new Atendefy.API.Infrastructure.Security.TurnstileValidator(
+    sp.GetRequiredService<IHttpClientFactory>(), turnstileSecret));
+builder.Services.AddSingleton(new Atendefy.API.Infrastructure.Email.SmtpSettings(
+    Host: builder.Configuration["Email:SmtpHost"] ?? string.Empty,
+    Port: builder.Configuration.GetValue("Email:SmtpPort", 587),
+    User: builder.Configuration["Email:SmtpUser"] ?? string.Empty,
+    Password: builder.Configuration["Email:SmtpPassword"] ?? string.Empty,
+    FromAddress: builder.Configuration["Email:FromAddress"] ?? string.Empty,
+    FromName: builder.Configuration["Email:FromName"] ?? "Mensagee"));
+builder.Services.AddSingleton<Atendefy.API.Infrastructure.Email.IEmailSender,
+    Atendefy.API.Infrastructure.Email.SmtpEmailSender>();
 builder.Services.AddSingleton<ITenantProvisioner>(_ => new TenantProvisioner(connStr));
 
 // Auth
@@ -170,6 +185,16 @@ builder.Services.AddCors(opt => opt.AddDefaultPolicy(p => p
     .AllowAnyHeader().AllowAnyMethod().AllowCredentials()));
 
 var app = builder.Build();
+
+// Atrás do Caddy: confia no X-Forwarded-For para obter o IP real do cliente (usado no rate-limit
+// do cadastro). KnownProxies/Networks limpos = aceita o header do proxy interno.
+var fwdOptions = new Microsoft.AspNetCore.Builder.ForwardedHeadersOptions
+{
+    ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor
+};
+fwdOptions.KnownIPNetworks.Clear();
+fwdOptions.KnownProxies.Clear();
+app.UseForwardedHeaders(fwdOptions);
 
 if (!app.Environment.IsEnvironment("Testing"))
 {

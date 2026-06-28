@@ -9,4 +9,5 @@ public class TenantUser : BaseEntity
     public string PasswordHash { get; set; } = string.Empty;
     public string Role { get; set; } = "Owner"; // Owner | Admin | Viewer
     public string Name { get; set; } = string.Empty;
+    public bool EmailVerified { get; set; }
 }

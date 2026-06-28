@@ -39,6 +39,15 @@ services:
       # Chave de admin p/ aprovar empresas (POST /tenants/{sub}/activate via header X-Admin-Key).
       # Vazio = endpoints admin desativados. Defina ADMIN_KEY no .env da VM.
       - Admin__Key=${ADMIN_KEY:-}
+      # Anti-abuso do cadastro anônimo. Vazio = captcha desativado (NÃO recomendado em prod).
+      - Turnstile__SecretKey=${TURNSTILE_SECRET_KEY:-}
+      # SMTP para o e-mail de verificação de cadastro. Vazio = não envia (apenas loga).
+      - Email__SmtpHost=${EMAIL_SMTP_HOST:-}
+      - Email__SmtpPort=${EMAIL_SMTP_PORT:-587}
+      - Email__SmtpUser=${EMAIL_SMTP_USER:-}
+      - Email__SmtpPassword=${EMAIL_SMTP_PASSWORD:-}
+      - Email__FromAddress=${EMAIL_FROM_ADDRESS:-}
+      - Email__FromName=${EMAIL_FROM_NAME:-Mensagee}
     depends_on:
       postgres:
         condition: service_healthy

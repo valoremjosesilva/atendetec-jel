@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import Turnstile from '@/components/Turnstile';
 
 export default function RegisterPage() {
   const [form, setForm] = useState<RegisterRequest>({
@@ -21,9 +22,11 @@ export default function RegisterPage() {
     ownerEmail: '',
     ownerPassword: '',
   });
+  const [captchaToken, setCaptchaToken] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [resent, setResent] = useState(false);
 
   function update(field: keyof RegisterRequest, value: string) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -34,8 +37,8 @@ export default function RegisterPage() {
     setError('');
     setLoading(true);
     try {
-      // A empresa nasce "pendente": não logamos aqui; o acesso libera após aprovação.
-      await apiClient.post('/tenants/register', form);
+      // A empresa nasce "pendente" e o e-mail precisa ser confirmado antes da aprovação.
+      await apiClient.post('/tenants/register', { ...form, captchaToken });
       setSubmitted(true);
     } catch (err: unknown) {
       const msg =
@@ -47,18 +50,38 @@ export default function RegisterPage() {
     }
   }
 
+  async function handleResend() {
+    setResent(false);
+    try {
+      await apiClient.post('/tenants/resend-verification', {
+        subdomain: form.subdomain,
+        email: form.ownerEmail,
+      });
+      setResent(true);
+    } catch {
+      setResent(true); // resposta genérica de qualquer forma
+    }
+  }
+
   if (submitted) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <Card className="w-full max-w-md text-center">
           <CardHeader>
-            <CardTitle>Empresa cadastrada! 🎉</CardTitle>
+            <CardTitle>Confirme seu e-mail 📧</CardTitle>
             <CardDescription>
-              Sua conta está <strong>em análise</strong>. Assim que for liberada, você poderá
-              entrar com o e-mail e a senha que cadastrou.
+              Enviamos um link de confirmação para <strong>{form.ownerEmail}</strong>. Clique no link
+              para validar seu e-mail. Depois disso, sua conta entra em análise e avisaremos quando for
+              liberada.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
+            <Button variant="outline" className="w-full" onClick={handleResend}>
+              Reenviar e-mail de confirmação
+            </Button>
+            {resent && (
+              <p className="text-sm text-green-600">Se houver um cadastro pendente, o e-mail foi reenviado.</p>
+            )}
             <Button className="w-full" render={<Link to="/login">Ir para o login</Link>} />
           </CardContent>
         </Card>
@@ -130,8 +153,9 @@ export default function RegisterPage() {
                 minLength={8}
               />
             </div>
+            <Turnstile onToken={setCaptchaToken} />
             {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="w-full" disabled={loading || !captchaToken}>
               {loading ? 'Criando conta…' : 'Criar conta'}
             </Button>
             <p className="text-sm text-center text-muted-foreground">
