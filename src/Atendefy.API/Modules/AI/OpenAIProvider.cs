@@ -31,11 +31,23 @@ public class OpenAIProvider(
         response.EnsureSuccessStatusCode();
 
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
-        var content = json.GetProperty("choices")[0]
-                          .GetProperty("message")
-                          .GetProperty("content")
-                          .GetString() ?? string.Empty;
-        var tokens = json.GetProperty("usage").GetProperty("completion_tokens").GetInt32();
+
+        string content = string.Empty;
+        int tokens = 0;
+
+        if (json.TryGetProperty("choices", out var choices)
+            && choices.GetArrayLength() > 0
+            && choices[0].TryGetProperty("message", out var message)
+            && message.TryGetProperty("content", out var contentEl))
+        {
+            content = contentEl.GetString() ?? string.Empty;
+        }
+
+        if (json.TryGetProperty("usage", out var usage)
+            && usage.TryGetProperty("completion_tokens", out var tokensEl))
+        {
+            tokens = tokensEl.GetInt32();
+        }
 
         return new AICompletionResult(content, tokens);
     }
