@@ -120,6 +120,10 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         Services.GetRequiredService<JwtService>()
             .GenerateAccessToken(Guid.NewGuid(), TenantId, "Owner", UserEmail);
 
+    public string MintTokenForTenant(Guid tenantId) =>
+        Services.GetRequiredService<JwtService>()
+            .GenerateAccessToken(Guid.NewGuid(), tenantId, "Owner", "other@test.com");
+
     public HttpClient CreateTenantClient(string? subdomain = null)
     {
         subdomain ??= Subdomain;
