@@ -96,7 +96,9 @@ services:
       - atendefy
 
   evolution-api:
-    image: atendai/evolution-api:latest
+    # Versao fixada: Baileys e frágil e um pull de :latest pode quebrar o QR code.
+    # v2.2.3 = digest da imagem que roda em produção. Não subir de versão sem testar QR.
+    image: atendai/evolution-api:v2.2.3
     profiles: [production]
     restart: unless-stopped
     environment:
