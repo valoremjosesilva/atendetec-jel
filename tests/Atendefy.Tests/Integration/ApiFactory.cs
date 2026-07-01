@@ -5,6 +5,7 @@ using Atendefy.API.Modules.Tenants.Models;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -61,8 +62,11 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
         builder.ConfigureServices(services =>
         {
-            // Replace PublicDbContext with InMemory
+            // Replace PublicDbContext with InMemory.
+            // EF 9+ registra a config do provider via IDbContextOptionsConfiguration<T>;
+            // sem removê-la, Npgsql e InMemory ficam ambos registrados (erro fatal no EF 10).
             services.RemoveAll<DbContextOptions<PublicDbContext>>();
+            services.RemoveAll<IDbContextOptionsConfiguration<PublicDbContext>>();
             services.RemoveAll<PublicDbContext>();
             services.AddDbContext<PublicDbContext>(opt =>
                 opt.UseInMemoryDatabase("IntegrationTestPublicDb"));
