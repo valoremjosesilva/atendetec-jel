@@ -165,6 +165,10 @@ builder.Services.AddHostedService(sp => new ConversationWorker(
     sp.GetRequiredService<IServiceScopeFactory>(),
     sp.GetRequiredService<RedisService>(),
     sp.GetRequiredService<BookingFlowService>(),
+    // Instância própria: o worker é singleton e AiConfigService é scoped, mas a
+    // classe é stateless e todas as deps são singletons — seguro construir direto.
+    new AiConfigService(sp.GetRequiredService<TenantDbContextFactory>(), encryptionKey,
+        sp.GetRequiredService<RedisService>()),
     sp.GetRequiredService<ILogger<ConversationWorker>>()));
 
 // Billing

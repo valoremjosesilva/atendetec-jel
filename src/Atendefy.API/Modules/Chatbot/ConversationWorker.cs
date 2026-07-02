@@ -29,6 +29,7 @@ public class ConversationWorker(
     IServiceScopeFactory scopeFactory,
     Atendefy.API.Infrastructure.Cache.RedisService redis,
     BookingFlowService bookingFlow,
+    AiConfigService aiConfigService,
     ILogger<ConversationWorker> logger) : BackgroundService
 {
     private const string StreamName = "messages.inbound";
@@ -129,14 +130,16 @@ public class ConversationWorker(
             }
         }
 
-        await using var tenantDb = tenantDbFactory.Create(msg.SchemaName);
-        var aiConfig = await tenantDb.AiConfigs.FirstOrDefaultAsync();
+        // Config de IA via cache Redis (TTL 1h, invalidado no upsert) — evita uma
+        // query por mensagem no caminho quente. Ver AiConfigService.GetAsync.
+        var aiConfig = await aiConfigService.GetAsync(msg.SchemaName);
         if (aiConfig is null)
         {
             logger.LogWarning("Tenant {TenantId} sem config de IA", msg.TenantId);
             return;
         }
 
+        await using var tenantDb = tenantDbFactory.Create(msg.SchemaName);
         var waAccount = await tenantDb.WhatsAppAccounts.FindAsync(accountId ?? Guid.Empty);
         if (waAccount?.ConfigJson is null)
         {
