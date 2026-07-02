@@ -15,6 +15,7 @@ public record EvolutionData(
 );
 
 public record EvolutionKey(
+    [property: JsonPropertyName("id")] string? Id,
     [property: JsonPropertyName("remoteJid")] string RemoteJid,
     [property: JsonPropertyName("fromMe")] bool FromMe
 );
