@@ -16,9 +16,7 @@ logs/
 id_rsa
 id_ed25519
 private-key-gc.txt
-.gitignore
 prompt-atendimento-jel.md
-.gitignore
 api-key-claude.md
 chave-gemini.md
 api-groq.md
@@ -26,3 +24,6 @@ Meta.md
 controle.md
 docs/infos.md
 docs/SECRET_GITUHUB.txt
+
+# Diretório de sessão do Claude Code (worktrees de agentes, settings locais)
+.claude/
