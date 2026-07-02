@@ -12,6 +12,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/authStore';
+import { logout } from '@/api/client';
 import { useEntitlements } from '@/hooks/useEntitlements';
 import { cn } from '@/lib/utils';
 
@@ -29,7 +30,6 @@ const navItems = [
 ];
 
 export default function Sidebar() {
-  const clear = useAuthStore((s) => s.clear);
   const subdomain = useAuthStore((s) => s.subdomain);
   const { data: me } = useEntitlements();
 
@@ -88,7 +88,7 @@ export default function Sidebar() {
       )}
       <div className="p-2 border-t">
         <button
-          onClick={clear}
+          onClick={logout}
           className="flex items-center gap-3 px-3 py-2 rounded-md text-sm w-full hover:bg-accent hover:text-accent-foreground transition-colors"
         >
           <LogOut className="h-4 w-4" />

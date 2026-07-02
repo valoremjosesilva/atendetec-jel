@@ -95,10 +95,15 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             OnMessageReceived = ctx =>
             {
-                if (ctx.Request.Path.StartsWithSegments("/conversations/stream"))
+                // SPA: o access token vem em cookie HttpOnly (same-origin via proxy /api),
+                // inclusive para SSE — EventSource envia cookies automaticamente.
+                // O header Authorization, quando presente (testes, integrações), tem
+                // precedência via processamento padrão do JwtBearer.
+                if (string.IsNullOrEmpty(ctx.Token) &&
+                    !ctx.Request.Headers.ContainsKey("Authorization") &&
+                    ctx.Request.Cookies.TryGetValue(AuthCookies.Access, out var cookieToken))
                 {
-                    var t = ctx.Request.Query["token"].ToString();
-                    if (!string.IsNullOrEmpty(t)) ctx.Token = t;
+                    ctx.Token = cookieToken;
                 }
                 return Task.CompletedTask;
             }

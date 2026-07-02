@@ -1,3 +1,4 @@
 namespace Atendefy.API.Modules.Auth.Models;
 
-public record RefreshRequest(string RefreshToken);
+// RefreshToken no body é fallback para clients de API — o SPA usa o cookie HttpOnly.
+public record RefreshRequest(string? RefreshToken);

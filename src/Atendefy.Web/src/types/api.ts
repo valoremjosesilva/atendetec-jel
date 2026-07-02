@@ -4,9 +4,8 @@ export interface LoginRequest {
   password: string;
 }
 
+// Tokens vão em cookies HttpOnly — o body só carrega metadados da sessão.
 export interface AuthResponse {
-  accessToken: string;
-  refreshToken: string;
   expiresAt: string;
   tenantId: string;
   userId: string;

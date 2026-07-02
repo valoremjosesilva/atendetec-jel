@@ -9,7 +9,7 @@ namespace Atendefy.Tests.Integration;
 public class AuthIntegrationTests(ApiFactory factory)
 {
     [Fact]
-    public async Task Login_WithValidCredentials_Returns200WithToken()
+    public async Task Login_WithValidCredentials_Returns200WithSessionAndCookies()
     {
         var client = factory.CreateTenantClient();
 
@@ -21,8 +21,19 @@ public class AuthIntegrationTests(ApiFactory factory)
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        body.GetProperty("accessToken").GetString().Should().NotBeNullOrEmpty();
         body.GetProperty("role").GetString().Should().Be("Owner");
+        body.GetProperty("tenantId").GetString().Should().NotBeNullOrEmpty();
+
+        // Tokens não transitam no body — vão em cookies HttpOnly
+        body.TryGetProperty("accessToken", out _).Should().BeFalse();
+        body.TryGetProperty("refreshToken", out _).Should().BeFalse();
+
+        var cookies = response.Headers.GetValues("Set-Cookie").ToList();
+        cookies.Should().Contain(c =>
+            c.StartsWith("atendefy_access=") &&
+            c.Contains("httponly", StringComparison.OrdinalIgnoreCase) &&
+            c.Contains("samesite=strict", StringComparison.OrdinalIgnoreCase));
+        cookies.Should().Contain(c => c.StartsWith("atendefy_refresh="));
     }
 
     [Fact]

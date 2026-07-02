@@ -49,9 +49,9 @@ Sugestão de agrupamento para execução paralela:
 - **Credenciais na raiz do repo** (Security #1): `ssh-key-2026-06-10.key`, `SECRET_GITUHUB.txt`
   e outros arquivos de credencial precisam de **rotação imediata** + `git filter-repo` para
   limpar o histórico. Esta é uma ação manual, não um plano de código.
-- **Upgrade NuGet para .NET 10** (Deps #8): Npgsql, JwtBearer, EFCore.NamingConventions na
-  versão 8.x enquanto o runtime é .NET 10. Upgrade coordenado recomendado em sessão separada.
-- **JWT em localStorage** (Security #12): migração para HttpOnly cookie é uma mudança de
-  arquitetura de auth — sessão própria.
-- **Evolution API `:latest`** (Deps #16): fixar versão em `docker-compose.yml` é uma linha de
-  mudança; pode ser feito ad-hoc sem plano formal.
+- **Upgrade NuGet para .NET 10** (Deps #8): ~~Npgsql, JwtBearer, EFCore.NamingConventions na
+  versão 8.x enquanto o runtime é .NET 10.~~ **FEITO em 2026-07-01** — pacotes alinhados a 10.x.
+- **JWT em localStorage** (Security #12): ~~migração para HttpOnly cookie é uma mudança de
+  arquitetura de auth.~~ **FEITO em 2026-07-01** — tokens em cookies HttpOnly/SameSite=Strict.
+- **Evolution API `:latest`** (Deps #16): ~~fixar versão em `docker-compose.yml`.~~
+  **FEITO em 2026-07-01** — fixada em `v2.2.3`.

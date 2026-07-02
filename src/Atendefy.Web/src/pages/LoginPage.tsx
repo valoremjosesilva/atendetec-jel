@@ -27,7 +27,8 @@ export default function LoginPage() {
         { email, password },
         { headers: { 'X-Tenant-Key': subdomain } }
       );
-      setAuth({ ...data, subdomain });
+      // Tokens ficam em cookies HttpOnly; aqui só os metadados da sessão.
+      setAuth({ tenantId: data.tenantId, userId: data.userId, role: data.role, subdomain });
       navigate('/dashboard');
     } catch {
       setError('Credenciais inválidas ou empresa não encontrada.');

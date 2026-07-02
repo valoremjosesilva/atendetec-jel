@@ -1,42 +1,41 @@
 import axios, { AxiosError, type InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '@/stores/authStore';
-import type { AuthResponse } from '@/types/api';
 
+// Auth via cookies HttpOnly setados pela API (same-origin através do proxy /api).
+// Nenhum token transita por JavaScript — só injetamos o X-Tenant-Key.
 export const apiClient = axios.create({
   baseURL: '/api',
+  withCredentials: true,
 });
 
 apiClient.interceptors.request.use((config) => {
-  const { accessToken, subdomain } = useAuthStore.getState();
-  if (accessToken) {
-    config.headers.Authorization = `Bearer ${accessToken}`;
-  }
+  const { subdomain } = useAuthStore.getState();
   if (subdomain) {
     config.headers['X-Tenant-Key'] = subdomain;
   }
   return config;
 });
 
+export function logout() {
+  // Expira os cookies no servidor; limpa o estado local mesmo se a chamada falhar.
+  void axios.post('/api/auth/logout', {}, { withCredentials: true }).catch(() => {});
+  useAuthStore.getState().clear();
+  window.location.href = '/login';
+}
+
 // ─── Auto-refresh on 401 ────────────────────────────────────────────────────
-// When the 15-min access token expires, transparently exchange the refresh token
-// for a new pair and replay the original request. Concurrent 401s share a single
-// in-flight refresh so we don't fire N refreshes at once.
+// Quando o access token (cookie de 15 min) expira, o backend troca o refresh
+// cookie por um novo par e a request original é repetida. 401s concorrentes
+// compartilham um único refresh em andamento para não disparar N refreshes.
 
-let refreshPromise: Promise<string> | null = null;
+let refreshPromise: Promise<void> | null = null;
 
-function refreshAccessToken(): Promise<string> {
+function refreshSession(): Promise<void> {
   if (!refreshPromise) {
-    const { refreshToken } = useAuthStore.getState();
     refreshPromise = axios
-      // bare axios (no interceptors) to avoid recursion
-      .post<AuthResponse>('/api/auth/refresh', { refreshToken })
-      .then(({ data }) => {
-        useAuthStore.getState().setTokens({
-          accessToken: data.accessToken,
-          refreshToken: data.refreshToken,
-        });
-        return data.accessToken;
-      })
+      // bare axios (sem interceptors) para evitar recursão
+      .post('/api/auth/refresh', {}, { withCredentials: true })
+      .then(() => undefined)
       .finally(() => {
         refreshPromise = null;
       });
@@ -44,26 +43,20 @@ function refreshAccessToken(): Promise<string> {
   return refreshPromise;
 }
 
-function logout() {
-  useAuthStore.getState().clear();
-  window.location.href = '/login';
-}
-
 apiClient.interceptors.response.use(
   (res) => res,
   async (error: AxiosError) => {
     const original = error.config as (InternalAxiosRequestConfig & { _retry?: boolean }) | undefined;
     const status = error.response?.status;
-    const { refreshToken } = useAuthStore.getState();
+    const { authenticated } = useAuthStore.getState();
 
     const isAuthCall = original?.url?.includes('/auth/');
-    const canRefresh = status === 401 && refreshToken && original && !original._retry && !isAuthCall;
+    const canRefresh = status === 401 && authenticated && original && !original._retry && !isAuthCall;
 
     if (canRefresh) {
       original._retry = true;
       try {
-        const newToken = await refreshAccessToken();
-        original.headers.Authorization = `Bearer ${newToken}`;
+        await refreshSession();
         return apiClient(original);
       } catch {
         logout();

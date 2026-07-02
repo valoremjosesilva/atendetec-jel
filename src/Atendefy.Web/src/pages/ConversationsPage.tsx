@@ -47,9 +47,7 @@ export default function ConversationsPage() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    const token = useAuthStore.getState().accessToken;
-    if (!token) return;
-    const safeToken: string = token;
+    if (!useAuthStore.getState().authenticated) return;
 
     let es: EventSource | null = null;
     let retryTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -58,8 +56,8 @@ export default function ConversationsPage() {
 
     function connect() {
       if (destroyed) return;
-      const url = `/api/conversations/stream?token=${encodeURIComponent(safeToken)}`;
-      es = new EventSource(url);
+      // Auth via cookie HttpOnly — EventSource same-origin envia cookies sozinho.
+      es = new EventSource('/api/conversations/stream');
 
       es.onmessage = (e) => {
         retries = 0;

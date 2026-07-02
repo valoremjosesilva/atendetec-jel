@@ -1,46 +1,45 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
+// Os tokens JWT vivem em cookies HttpOnly setados pela API — nunca em
+// localStorage. Aqui ficam apenas metadados não-sensíveis da sessão.
 interface AuthState {
-  accessToken: string | null;
-  refreshToken: string | null;
+  authenticated: boolean;
   tenantId: string | null;
   userId: string | null;
   role: string | null;
   subdomain: string | null;
   setAuth: (data: {
-    accessToken: string;
-    refreshToken: string;
     tenantId: string;
     userId: string;
     role: string;
     subdomain: string;
   }) => void;
-  setTokens: (tokens: { accessToken: string; refreshToken: string }) => void;
   clear: () => void;
 }
+
+const emptyState = {
+  authenticated: false,
+  tenantId: null,
+  userId: null,
+  role: null,
+  subdomain: null,
+};
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
-      accessToken: null,
-      refreshToken: null,
-      tenantId: null,
-      userId: null,
-      role: null,
-      subdomain: null,
-      setAuth: (data) => set(data),
-      setTokens: (tokens) => set(tokens),
-      clear: () =>
-        set({
-          accessToken: null,
-          refreshToken: null,
-          tenantId: null,
-          userId: null,
-          role: null,
-          subdomain: null,
-        }),
+      ...emptyState,
+      setAuth: (data) => set({ ...data, authenticated: true }),
+      clear: () => set(emptyState),
     }),
-    { name: 'atendefy-auth' }
+    {
+      name: 'atendefy-auth',
+      // v1: tokens saíram do localStorage (migração para cookie HttpOnly).
+      // A migração descarta o estado v0 — apaga os tokens persistidos pela
+      // versão anterior e força um novo login.
+      version: 1,
+      migrate: () => ({ ...emptyState }) as AuthState,
+    }
   )
 );
