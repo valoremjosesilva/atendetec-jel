@@ -288,50 +288,15 @@ if (!app.Environment.IsEnvironment("Testing"))
         catch (Exception ex) { Log.Error(ex, "Falha ao semear planos"); }
     }
 
-    // Tenant schema migrations (idempotent — safe to re-run on every startup)
+    // Tenant schema patches: DDL roda só para tenants novos ou quando o patch mudou
+    // (controle por hash em public.tenant_schema_patches) — o boot deixa de ser
+    // O(N tenants) no caso comum. Ver TenantSchemaMigrator.
     using (var tenantMigScope = app.Services.CreateScope())
     {
         var publicDb2 = tenantMigScope.ServiceProvider.GetRequiredService<PublicDbContext>();
         var tenants = await publicDb2.Tenants.ToListAsync();
-        foreach (var t in tenants)
-        {
-            try
-            {
-                await using var conn = new NpgsqlConnection(connStr);
-                await conn.OpenAsync();
-                var migSql = $"""
-                    ALTER TABLE IF EXISTS "{t.SchemaName}".conversations
-                        ADD COLUMN IF NOT EXISTS bot_paused BOOLEAN DEFAULT FALSE,
-                        ADD COLUMN IF NOT EXISTS account_id UUID,
-                        ADD COLUMN IF NOT EXISTS is_resolved BOOLEAN DEFAULT FALSE,
-                        ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ;
-                    ALTER TABLE IF EXISTS "{t.SchemaName}".calendar_configs
-                        ADD COLUMN IF NOT EXISTS api_base_url TEXT,
-                        ADD COLUMN IF NOT EXISTS tenant_slug TEXT,
-                        ADD COLUMN IF NOT EXISTS api_key_encrypted TEXT,
-                        ADD COLUMN IF NOT EXISTS default_service_id UUID,
-                        ADD COLUMN IF NOT EXISTS default_resource_id UUID,
-                        ADD COLUMN IF NOT EXISTS webhook_secret_encrypted TEXT;
-                    CREATE TABLE IF NOT EXISTS "{t.SchemaName}".contacts (
-                        phone VARCHAR(30) PRIMARY KEY,
-                        name VARCHAR(200),
-                        created_at TIMESTAMPTZ DEFAULT NOW()
-                    );
-                    CREATE TABLE IF NOT EXISTS "{t.SchemaName}".quick_replies (
-                        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                        title VARCHAR(100) NOT NULL,
-                        body TEXT NOT NULL,
-                        created_at TIMESTAMPTZ DEFAULT NOW()
-                    );
-                    """;
-                await using var cmd = new NpgsqlCommand(migSql, conn);
-                await cmd.ExecuteNonQueryAsync();
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex, "Tenant schema migration failed for {SchemaName}", t.SchemaName);
-            }
-        }
+        var schemas = tenants.Select(t => t.SchemaName).ToList();
+        await new TenantSchemaMigrator(connStr).RunAsync(schemas);
     }
 }
 

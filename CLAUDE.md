@@ -108,8 +108,10 @@ em `WhatsAppAccount.ConfigJson` (encriptado com AES).
   mantida. Não atualizar para `:latest` sem testar QR code.
 - **NuGet packages**: pacotes Npgsql, JwtBearer e EFCore.NamingConventions estão na versão 8.x
   enquanto o runtime é .NET 10. Funciona mas é tecnicamente um mismatch. Upgrade planejado.
-- **Startup lento**: `Program.cs` roda migrations de schema para todos os tenants no startup.
-  Em produção com muitos tenants, isso pode ser lento.
+- **Migrations de tenant no startup**: o patch de schema per-tenant
+  (`TenantSchemaMigrator`) só roda DDL para tenants novos ou quando o SQL do patch muda —
+  o controle é por hash na tabela `public.tenant_schema_patches`. Ao alterar o
+  `PatchSqlTemplate`, o hash muda e o patch reaplica em todos os tenants no boot seguinte.
 - **Chaves SSH**: `ssh-key-2026-06-10.key` está na raiz — arquivo gitignored mas presente no
   histórico. Não commitar arquivos `.key` ou `.pem`.
 
