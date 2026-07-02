@@ -26,10 +26,22 @@ public class AnthropicProvider(HttpClient httpClient, string apiKey) : IAIProvid
         response.EnsureSuccessStatusCode();
 
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
-        var content = json.GetProperty("content")[0]
-                          .GetProperty("text")
-                          .GetString() ?? string.Empty;
-        var tokens = json.GetProperty("usage").GetProperty("output_tokens").GetInt32();
+
+        string content = string.Empty;
+        int tokens = 0;
+
+        if (json.TryGetProperty("content", out var contentArr)
+            && contentArr.GetArrayLength() > 0
+            && contentArr[0].TryGetProperty("text", out var textEl))
+        {
+            content = textEl.GetString() ?? string.Empty;
+        }
+
+        if (json.TryGetProperty("usage", out var usage)
+            && usage.TryGetProperty("output_tokens", out var tokensEl))
+        {
+            tokens = tokensEl.GetInt32();
+        }
 
         return new AICompletionResult(content, tokens);
     }

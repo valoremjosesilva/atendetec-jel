@@ -30,4 +30,32 @@ public class AnthropicProviderTests
         handler.Requests[0].RequestUri!.ToString().Should().Contain("messages");
         handler.Requests[0].Headers.GetValues("x-api-key").First().Should().Be("sk-ant-test");
     }
+
+    [Fact]
+    public async Task CompleteAsync_WhenContentArrayIsEmpty_ReturnsEmptyContent()
+    {
+        var responseJson = """{"content":[],"usage":{"output_tokens":0}}""";
+        var handler = MockHttpMessageHandler.ReturnsJson(responseJson);
+        var provider = new AnthropicProvider(new HttpClient(handler), "sk-ant-test");
+
+        var result = await provider.CompleteAsync(new AICompletionRequest(
+            SystemPrompt: "Prompt.", Messages: [new ChatMessage("user", "oi")], Model: "claude-haiku-4-5-20251001"));
+
+        result.Content.Should().BeEmpty();
+        result.TokensUsed.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task CompleteAsync_WhenResponseIsMissingExpectedFields_ReturnsEmptyContent()
+    {
+        var responseJson = """{"type":"error","error":{"message":"overloaded"}}""";
+        var handler = MockHttpMessageHandler.ReturnsJson(responseJson);
+        var provider = new AnthropicProvider(new HttpClient(handler), "sk-ant-test");
+
+        var result = await provider.CompleteAsync(new AICompletionRequest(
+            SystemPrompt: "Prompt.", Messages: [new ChatMessage("user", "oi")], Model: "claude-haiku-4-5-20251001"));
+
+        result.Content.Should().BeEmpty();
+        result.TokensUsed.Should().Be(0);
+    }
 }
