@@ -1,3 +1,5 @@
+using System.Text.Json;
+using Atendefy.API.Infrastructure.Cache;
 using Atendefy.API.Infrastructure.Database;
 using Atendefy.API.Modules.AI.Models;
 using Atendefy.API.SharedKernel;
@@ -6,9 +8,15 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Atendefy.API.Modules.AI;
 
-public class AiConfigService(TenantDbContextFactory dbFactory, string encryptionKey)
+public class AiConfigService(
+    TenantDbContextFactory dbFactory,
+    string encryptionKey,
+    RedisService redis)
 {
     private static readonly HashSet<string> ValidProviders = ["openai", "anthropic", "mock"];
+    private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(1);
+
+    private static string CacheKey(string schemaName) => $"aiconfig:{schemaName}";
 
     public async Task<Result<AiConfig>> UpsertAsync(string schemaName, AiConfigRequest request)
     {
@@ -29,6 +37,7 @@ public class AiConfigService(TenantDbContextFactory dbFactory, string encryption
             existing.SystemPrompt = request.SystemPrompt;
             existing.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
+            await redis.DeleteAsync(CacheKey(schemaName));
             return Result<AiConfig>.Ok(existing);
         }
 
@@ -44,12 +53,21 @@ public class AiConfigService(TenantDbContextFactory dbFactory, string encryption
         };
         db.AiConfigs.Add(config);
         await db.SaveChangesAsync();
+        await redis.DeleteAsync(CacheKey(schemaName));
         return Result<AiConfig>.Ok(config);
     }
 
     public async Task<AiConfig?> GetAsync(string schemaName)
     {
+        var cached = await redis.GetAsync(CacheKey(schemaName));
+        if (cached is not null)
+            return JsonSerializer.Deserialize<AiConfig>(cached);
+
         await using var db = dbFactory.Create(schemaName);
-        return await db.AiConfigs.FirstOrDefaultAsync();
+        var config = await db.AiConfigs.FirstOrDefaultAsync();
+        if (config is not null)
+            await redis.SetAsync(CacheKey(schemaName),
+                JsonSerializer.Serialize(config), CacheTtl);
+        return config;
     }
 }

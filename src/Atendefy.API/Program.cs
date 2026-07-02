@@ -136,7 +136,8 @@ builder.Services.AddHttpClient("ai");
 builder.Services.AddSingleton(sp => new AIProviderFactory(
     sp.GetRequiredService<IHttpClientFactory>(), openAiBaseUrl));
 builder.Services.AddScoped(sp =>
-    new AiConfigService(sp.GetRequiredService<TenantDbContextFactory>(), encryptionKey));
+    new AiConfigService(sp.GetRequiredService<TenantDbContextFactory>(), encryptionKey,
+        sp.GetRequiredService<RedisService>()));
 
 // Scheduling (agendamento via link — Cal.com/Calendly — e via API — Horafy)
 builder.Services.AddScoped(sp =>
