@@ -1,6 +1,7 @@
 # Planos de Melhoria — Atendefy / Mensagee
 
-Gerado pelo advisor (`/improve deep`) em 2026-06-28, commit `e805859`.
+Rodada 1 gerada pelo advisor (`/improve deep`) em 2026-06-28, commit `e805859`.
+Rodada 2 gerada em 2026-07-02, commit `f809720`.
 Execute na ordem abaixo, a menos que as dependências indiquem outra coisa.
 Cada executor: leia o plano inteiro antes de começar, respeite as condições de PARE e atualize
 a coluna de status ao terminar.
@@ -17,41 +18,57 @@ a coluna de status ao terminar.
 | [006](006-frontend-ci-job.md)          | CI: job de build do frontend           | P1 | M | —   | DONE |
 | [007](007-tenant-isolation-tests.md)   | Testes de isolamento entre tenants     | P1 | P | —   | DONE |
 | [008](008-claude-md.md)               | Criar CLAUDE.md                         | P2 | P | —   | DONE |
+| [009](009-stream-ack-reliability.md)  | Não perder mensagens em falha do worker (PEL + dead-letter) | P1 | M | — | TODO |
+| [010](010-webhook-dedup-atomic.md)    | Dedup de webhook atômica (SET NX)       | P1 | S | —   | TODO |
+| [011](011-hot-path-indexes.md)        | Índices do caminho quente (contact_phone, subscriptions) | P1 | S | — | TODO |
+| [012](012-auth-rate-limiting.md)      | Rate-limit em login/refresh/verify-email | P1 | S | —  | TODO |
+| [013](013-billing-subscription-atomic-save.md) | Subscription+Invoice num único SaveChanges | P2 | S | — | TODO |
+| [014](014-frontend-deps-cleanup.md)   | Frontend: remover shadcn CLI + axios 1.18 (npm audit zero) | P2 | S | — | TODO |
 
-**Legenda de esforço:** P = Pequeno (horas) · M = Médio (~1 dia) · G = Grande (vários dias)
+**Legenda de esforço:** P/S = Pequeno (horas) · M = Médio (~1 dia) · G/L = Grande (vários dias)
 
 **Valores de status:** TODO | IN PROGRESS | DONE | BLOCKED (com motivo) | REJECTED (com motivo)
 
 ## Notas de dependência
 
-Todos os planos são independentes entre si e podem ser executados em qualquer ordem ou em
-paralelo por executores diferentes. A ordem acima reflete apenas a prioridade de impacto.
+- 009–014 são independentes entre si; podem rodar em paralelo por executores diferentes.
+- 009 e 010 tocam arquivos diferentes do mesmo domínio (worker vs endpoint) — merges tranquilos.
+- 011 muda o hash do `TenantSchemaMigrator.PatchSqlTemplate`: o primeiro boot após o deploy
+  reaplica o patch em todos os tenants (uma vez, esperado).
 
-Sugestão de agrupamento para execução paralela:
-- **Grupo A** (pequenos, backend): 001 + 002 + 007
-- **Grupo B** (médios, backend): 003 + 004 + 005
-- **Grupo C** (infraestrutura): 006 + 008
+## Achados considerados e rejeitados (não valem plano / não re-auditar)
 
-## Achados considerados e rejeitados (não valem plano)
+Rodada 1 (2026-06-28):
+- **PERF-01 (N+1 na lista de conversas)**: `c.Messages.Max()` gera subquery correlacionada — uma query só. Não é N+1.
+- **CORRECTNESS-09 (estados de erro no React)**: lacuna de UX, não bug. Deferred.
+- **PERF-11 (virtualização da lista de conversas)**: só relevante acima de ~500 conversas/tenant. Deferred.
+- **DEPS-07 (updates menores de npm)**: manutenção rotineira.
+- **CORRECTNESS-05 (race na criação de conversa)**: latente com worker single-consumer.
 
-- **PERF-01 (N+1 na lista de conversas)**: `c.Messages.Max()` em `.Select()` gera subquery SQL
-  correlacionada — uma só query, não N round-trips. Não é N+1 real. Não vale plano.
-- **CORRECTNESS-09 (estados de erro no React)**: optional chaining já previne crashes; é lacuna
-  de UX, não bug crítico. Deferred.
-- **PERF-11 (virtualização de lista de conversas)**: só relevante acima de ~500 conversas por
-  tenant; maioria não chega lá cedo. Deferred.
-- **DEPS-07 (updates menores de npm)**: manutenção rotineira; sem plano dedicado.
-- **CORRECTNESS-05 (race condition na criação de conversa)**: arquitetura single-worker do
-  ConversationWorker torna isso latente; baixa prioridade até escalar.
+Rodada 2 (2026-07-02):
+- **Fallback interativo no EvolutionProvider**: `IWhatsAppProvider.SendInteractiveAsync` tem
+  default interface implementation que degrada para texto numerado — já resolvido by-design.
+- **"Horafy não compila"**: docs `docs/fase1-implementacao-horafy.md` estão desatualizadas;
+  a solução compila e passa a suíte (117 testes) — o gap real é cobertura de testes (registrado abaixo).
+- **setState em componente desmontado (VerifyEmailPage)**: React 18+ eliminou o warning; sem efeito real.
+- **codecov `fail_ci_if_error: true`**: faria o CI falhar por instabilidade de serviço externo. Manter false.
+- **Índice composto em webhook_routes (Provider, LookupKey)**: LookupKey já tem índice único; ganho marginal.
+- **Credenciais untracked em `docs/`** (api-key-*.md etc.): ação manual do operador (mover para fora
+  do repo), não plano de código. O histórico git já foi limpo e as chaves rotacionadas (2026-07-01).
 
-## Achados fora do escopo destes planos (ação manual ou sessão futura)
+## Achados registrados sem plano nesta rodada (candidatos a rodadas futuras)
 
-- **Credenciais na raiz do repo** (Security #1): `ssh-key-2026-06-10.key`, `SECRET_GITUHUB.txt`
-  e outros arquivos de credencial precisam de **rotação imediata** + `git filter-repo` para
-  limpar o histórico. Esta é uma ação manual, não um plano de código.
-- **Upgrade NuGet para .NET 10** (Deps #8): ~~Npgsql, JwtBearer, EFCore.NamingConventions na
-  versão 8.x enquanto o runtime é .NET 10.~~ **FEITO em 2026-07-01** — pacotes alinhados a 10.x.
-- **JWT em localStorage** (Security #12): ~~migração para HttpOnly cookie é uma mudança de
-  arquitetura de auth.~~ **FEITO em 2026-07-01** — tokens em cookies HttpOnly/SameSite=Strict.
-- **Evolution API `:latest`** (Deps #16): ~~fixar versão em `docker-compose.yml`.~~
-  **FEITO em 2026-07-01** — fixada em `v2.2.3`.
+- **Testes dos caminhos críticos** (ConversationWorker, BookingFlowService, HorafyClient,
+  PersistAsync, EntitlementsService, IncrementWithTtl, webhook Meta e2e) — maior gap de qualidade; esforço M–L.
+- **Cal.com webhook sem HMAC** (hoje só token-capability na query; Horafy no mesmo arquivo valida assinatura).
+- **PII (telefone) em ≥8 pontos de log** do ConversationWorker/BookingFlow — LGPD/minimização.
+- **Code-splitting por rota** no frontend (bundle único de 647KB).
+- **EntitlementsService**: 2 queries públicas por mensagem → 1 join ou cache Redis.
+- **CI sem cache de NuGet**; **deploy sem health-check pós-up**.
+- **`ResolveTenantAsync` duplicado em 4 endpoints**; **merge PersistAsync/PersistUserOnlyAsync**.
+- **README desatualizado** (diz que deploy nunca ocorreu; faltam ~10 endpoints na referência; portas 5173/3001).
+- **Testcontainers** (Postgres/Redis reais) para a suíte de integração; **testes de frontend** (vitest).
+- **Unificar migração de tenant em EF** (hoje: provisioner SQL + patch por hash); **OpenAPI→TS typegen**;
+  **paginação nos endpoints admin**; **Serilog RequestId**; **TreatWarningsAsErrors**; **ESLint/Prettier**.
+- **Direção** (opções de produto): Team Members (entitlement existe, feature não), dashboard analytics
+  (taxa de resolução/tempo de resposta), broadcast/templates, tags de contatos.
