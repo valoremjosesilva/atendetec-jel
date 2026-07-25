@@ -1,16 +1,19 @@
-# CLAUDE.md — Guia do Repositório Atendefy / Mensagee
+# CLAUDE.md — Guia do Repositório Atendefy / Atende
 
 Este arquivo orienta agentes de IA e desenvolvedores sobre a estrutura, convenções e comandos
 do repositório.
 
 ## Visão geral
 
-**Atendefy** (marca externa: **Mensagee**) é um SaaS multi-tenant de atendimento via WhatsApp
-com IA. O código interno usa o nome `Atendefy`; a marca visível ao cliente é `Mensagee`.
+**Atendefy** (marca externa: **Atende**) é um SaaS multi-tenant de atendimento via WhatsApp
+com IA. O código interno usa o nome `Atendefy`; a marca visível ao cliente é `Atende`, publicada
+em `atende.mjml.com.br`. A marca externa anterior era `Mensagee` — trocada em julho/2026; se
+encontrar `Mensagee` em algum lugar, é resíduo, exceto a chave de localStorage `mensagee-admin`
+(`src/Atendefy.Web/src/stores/adminStore.ts`), mantida de propósito para não deslogar os admins.
 
 Stack: ASP.NET Core .NET 10 (backend) + React 19 + Vite + TypeScript (frontend) + PostgreSQL 16
-+ Redis 7. Deploy via Docker Compose em VM Google Cloud. CI via GitHub Actions → imagem GHCR →
-deploy por tag `v*`.
++ Redis 7. Deploy via Docker Compose em VM Google Cloud, em migração para Hetzner + Coolify
+(ver `infra/docker-compose.coolify.yml`). CI via GitHub Actions → imagem GHCR → deploy por tag `v*`.
 
 ## Estrutura de pastas
 

@@ -1,4 +1,4 @@
-# Guia: ativar Agendamento (Cal.com) no Mensagee
+# Guia: ativar Agendamento (Cal.com) no Atende
 
 Este guia mostra, passo a passo, como o dono do negócio conecta a própria agenda
 (Google ou Apple) e habilita o agendamento pelo WhatsApp. Quando ativo, o assistente
@@ -6,7 +6,7 @@ de IA envia automaticamente o seu link de agendamento sempre que um cliente quis
 marcar um horário — e o cliente escolhe o horário direto na sua agenda, sem você
 precisar responder manualmente.
 
-> **Como funciona, em uma frase:** o Mensagee guarda **um link de agendamento** e o bot
+> **Como funciona, em uma frase:** o Atende guarda **um link de agendamento** e o bot
 > o oferece na conversa. O cal.com cuida de disponibilidade, fuso horário, confirmação
 > e lembrete. Sua agenda do Google/Apple fica sempre sincronizada — nada de horário
 > dobrado.
@@ -62,9 +62,9 @@ formato:
 https://cal.com/seu-usuario/seu-evento
 ```
 Ex.: `https://cal.com/clinica-abc/consulta-30min`. **É esse link que você vai colar no
-Mensagee.**
+Atende.**
 
-## Passo 5 — Ativar no painel Mensagee
+## Passo 5 — Ativar no painel Atende
 1. Entre no painel → menu **Agenda**.
 2. **Status:** Ativado.
 3. **Serviço:** Cal.com.
@@ -86,7 +86,7 @@ do Google/Apple e o cal.com manda a confirmação/lembrete ao cliente.
   feriados e compromissos pessoais para não receber agendamento em cima.
 - **Lembretes:** configure lembretes por e-mail no cal.com (**Workflows**) para reduzir
   faltas. (Lembrete por SMS/WhatsApp pelo cal.com pode exigir plano pago.)
-- **Um serviço por enquanto:** o Mensagee usa **um link por empresa** nesta versão. Se
+- **Um serviço por enquanto:** o Atende usa **um link por empresa** nesta versão. Se
   você tem vários serviços, crie um event type "guarda-chuva" ou um link de perfil
   (`cal.com/seu-usuario`) que lista todos os seus tipos de evento.
 - **Fuso horário:** confira o fuso no cal.com — os horários oferecidos seguem o fuso da
@@ -103,7 +103,7 @@ do Google/Apple e o cal.com manda a confirmação/lembrete ao cliente.
 ---
 
 ## Próximo nível (opcional, já preparado)
-O Mensagee tem o **write-back via webhook** já preparado: ao confirmar um agendamento, o
+O Atende tem o **write-back via webhook** já preparado: ao confirmar um agendamento, o
 cal.com avisa o sistema e o **agendamento aparece dentro do painel**. Para ligar, é só
 configurar um webhook no cal.com apontando para a URL que aparece na tela Agenda
 (quando habilitado) e adicionar a pergunta de **telefone** no event type (Passo 3).

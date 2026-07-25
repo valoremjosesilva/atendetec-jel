@@ -1,4 +1,4 @@
-# Planos de Melhoria — Atendefy / Mensagee
+# Planos de Melhoria — Atendefy / Atende
 
 Rodada 1 gerada pelo advisor (`/improve deep`) em 2026-06-28, commit `e805859`.
 Rodada 2 gerada em 2026-07-02, commit `f809720`.

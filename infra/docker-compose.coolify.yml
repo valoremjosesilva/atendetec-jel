@@ -1,0 +1,99 @@
+# docker-compose.coolify.yml — Produção sob Coolify (Hetzner / mjml.com.br)
+#
+# O docker-compose.yml ao lado continua sendo a verdade do deploy ATUAL (VM
+# Google Cloud) e não deve ser alterado enquanto a migração não terminar. Este
+# arquivo é o destino; os dois convivem até o corte de DNS.
+#
+# Diferenças:
+#   - sem `caddy`: quem é dono de 80/443 é o Traefik do Coolify.
+#   - sem `postgres` e `redis`: usa as instâncias compartilhadas do Coolify.
+#   - `evolution-api` sai do profile `production` e sobe sempre — sob o Coolify
+#     não existe o profile que a ligava junto com o Caddy.
+#
+# Domínios (DOMAIN=atende.mjml.com.br):
+#   app.atende.mjml.com.br        → atendefy-web
+#   api.atende.mjml.com.br        → atendefy-api
+#   evolution.atende.mjml.com.br  → evolution-api
+#   monitor.atende.mjml.com.br    → uptime-kuma
+#
+# São hosts explícitos, não wildcard: os tenants do Atendefy são separados por
+# SCHEMA no Postgres, não por subdomínio. Certificado HTTP-01 comum resolve.
+#
+# ⚠ MIGRAÇÃO: a Evolution API guarda a sessão do WhatsApp em banco
+# (DATABASE_CONNECTION_URI, base `evolution`). Se essa base não vier junto no
+# dump, TODO cliente precisa ler o QR code de novo. Testar com um tenant antes
+# de migrar os demais.
+
+services:
+  atendefy-api:
+    image: ${API_IMAGE:?defina API_IMAGE}:${API_VERSION:-latest}
+    restart: unless-stopped
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:8080
+      - ConnectionStrings__Postgres=${POSTGRES_CONNECTION:?defina POSTGRES_CONNECTION}
+      - ConnectionStrings__Redis=${REDIS_CONNECTION:?defina REDIS_CONNECTION}
+      - Jwt__Secret=${JWT_SECRET:?defina JWT_SECRET}
+      - Encryption__Key=${ENCRYPTION_KEY:?defina ENCRYPTION_KEY}
+      # Deriva CORS e links de e-mail: a API monta https://app.{BaseDomain}.
+      - App__BaseDomain=${DOMAIN:-atende.mjml.com.br}
+      - Evolution__BaseUrl=http://evolution-api:8080
+      - Evolution__ApiKey=${EVOLUTION_API_KEY:?defina EVOLUTION_API_KEY}
+      - AI__OpenAiBaseUrl=${AI_OPENAI_BASE_URL:-https://generativelanguage.googleapis.com/v1beta/openai/chat/completions}
+      - Meta__AppSecret=${META_APP_SECRET:-}
+      - Meta__WebhookVerifyToken=${META_WEBHOOK_VERIFY_TOKEN:-}
+      - Admin__Key=${ADMIN_KEY:-}
+      - Turnstile__SecretKey=${TURNSTILE_SECRET_KEY:-}
+      - Email__SmtpHost=${EMAIL_SMTP_HOST:-}
+      - Email__SmtpPort=${EMAIL_SMTP_PORT:-587}
+      - Email__SmtpUser=${EMAIL_SMTP_USER:-}
+      - Email__SmtpPassword=${EMAIL_SMTP_PASSWORD:-}
+      - Email__FromAddress=${EMAIL_FROM_ADDRESS:-}
+      - Email__FromName=${EMAIL_FROM_NAME:-Atende}
+    networks:
+      - atendefy
+
+  atendefy-web:
+    image: ${WEB_IMAGE:?defina WEB_IMAGE}:${WEB_VERSION:-latest}
+    restart: unless-stopped
+    depends_on:
+      - atendefy-api
+    networks:
+      - atendefy
+
+  evolution-api:
+    # Versao fixada: Baileys e frágil e um pull de :latest pode quebrar o QR code.
+    # v2.2.3 = digest da imagem que roda em produção. Não subir de versão sem testar QR.
+    # A stack `infra/` da raiz do repositório JEL usa `:latest` — se as duas
+    # rodarem no mesmo host, é por aí que o QR quebra.
+    image: atendai/evolution-api:v2.2.3
+    restart: unless-stopped
+    environment:
+      - SERVER_URL=https://evolution.${DOMAIN:-atende.mjml.com.br}
+      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY:?defina EVOLUTION_API_KEY}
+      - DATABASE_ENABLED=true
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=${EVOLUTION_DATABASE_URI:?defina EVOLUTION_DATABASE_URI}
+      - CACHE_REDIS_ENABLED=false
+      - CACHE_LOCAL_ENABLED=true
+      # Versao do WhatsApp Web que o Baileys anuncia. O default da imagem fica
+      # desatualizado e o WhatsApp fecha o socket antes do QR. Atualizar quando o QR
+      # voltar a falhar (https://raw.githubusercontent.com/WhiskeySockets/Baileys/master/src/Defaults/baileys-version.json).
+      - CONFIG_SESSION_PHONE_VERSION=2.3000.1035194821
+    networks:
+      - atendefy
+
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    restart: unless-stopped
+    volumes:
+      - uptime_data:/app/data
+    networks:
+      - atendefy
+
+volumes:
+  uptime_data:
+
+networks:
+  atendefy:
+    driver: bridge

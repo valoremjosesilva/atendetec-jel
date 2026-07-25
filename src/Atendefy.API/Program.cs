@@ -79,7 +79,7 @@ builder.Services.AddSingleton(new Atendefy.API.Infrastructure.Email.SmtpSettings
     User: builder.Configuration["Email:SmtpUser"] ?? string.Empty,
     Password: builder.Configuration["Email:SmtpPassword"] ?? string.Empty,
     FromAddress: builder.Configuration["Email:FromAddress"] ?? string.Empty,
-    FromName: builder.Configuration["Email:FromName"] ?? "Mensagee"));
+    FromName: builder.Configuration["Email:FromName"] ?? "Atende"));
 builder.Services.AddSingleton<Atendefy.API.Infrastructure.Email.IEmailSender,
     Atendefy.API.Infrastructure.Email.SmtpEmailSender>();
 builder.Services.AddSingleton<ITenantProvisioner>(_ => new TenantProvisioner(connStr));

@@ -34,7 +34,7 @@ export default function AdminLoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>Superadmin · Mensagee</CardTitle>
+          <CardTitle>Superadmin · Atende</CardTitle>
           <CardDescription>Acesso restrito. Informe a chave de administrador.</CardDescription>
         </CardHeader>
         <CardContent>

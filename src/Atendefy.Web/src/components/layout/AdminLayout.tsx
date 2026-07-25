@@ -24,7 +24,7 @@ export default function AdminLayout() {
     <div className="flex h-screen">
       <aside className="w-56 flex flex-col h-full border-r bg-card">
         <div className="p-4 border-b">
-          <p className="font-bold text-lg">Mensagee</p>
+          <p className="font-bold text-lg">Atende</p>
           <p className="text-xs text-muted-foreground">Superadmin</p>
         </div>
         <nav className="flex-1 p-2 space-y-1">

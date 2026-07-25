@@ -47,7 +47,7 @@ services:
       - Email__SmtpUser=${EMAIL_SMTP_USER:-}
       - Email__SmtpPassword=${EMAIL_SMTP_PASSWORD:-}
       - Email__FromAddress=${EMAIL_FROM_ADDRESS:-}
-      - Email__FromName=${EMAIL_FROM_NAME:-Mensagee}
+      - Email__FromName=${EMAIL_FROM_NAME:-Atende}
     depends_on:
       postgres:
         condition: service_healthy

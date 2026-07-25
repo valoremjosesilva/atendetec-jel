@@ -167,11 +167,11 @@ public static class TenantEndpoints
 
         var html =
             $"<p>Olá, {System.Net.WebUtility.HtmlEncode(owner.OwnerName)}!</p>" +
-            $"<p>Confirme seu e-mail para concluir o cadastro da empresa <strong>{System.Net.WebUtility.HtmlEncode(owner.Name)}</strong> no Mensagee.</p>" +
+            $"<p>Confirme seu e-mail para concluir o cadastro da empresa <strong>{System.Net.WebUtility.HtmlEncode(owner.Name)}</strong> no Atende.</p>" +
             $"<p><a href=\"{link}\">Confirmar meu e-mail</a></p>" +
             $"<p>Ou copie e cole este endereço no navegador:<br>{link}</p>" +
             "<p>Se você não fez este cadastro, ignore esta mensagem.</p>";
 
-        await emailSender.SendAsync(owner.OwnerEmail, "Confirme seu e-mail — Mensagee", html);
+        await emailSender.SendAsync(owner.OwnerEmail, "Confirme seu e-mail — Atende", html);
     }
 }
