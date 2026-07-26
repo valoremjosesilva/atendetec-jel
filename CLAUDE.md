@@ -33,8 +33,13 @@ tests/Atendefy.Tests/      # xUnit + FluentAssertions + NSubstitute
   Integration/             # Testes de integração (WebApplicationFactory + InMemory DB)
   AI/, Auth/, Billing/...  # Testes unitários por módulo
 infra/
-  docker-compose.yml       # Produção
+  docker-compose.yml       # Produção ATUAL (VM Google Cloud)
+  docker-compose.coolify.yml   # Destino da migração (Hetzner + Coolify)
   docker-compose.override.yml  # Desenvolvimento local
+  fase1-setup.sh           # Bootstrap da VPS — provisiona a PLATAFORMA
+                           # inteira (Atende, Agenda, Alugue, Delivery,
+                           # Loja), não só este projeto. Roda uma vez por
+                           # VPS, antes de qualquer deploy.
   .env.example             # Variáveis de ambiente necessárias
 plans/                     # Planos de melhoria gerados pelo advisor
 ```

@@ -1,0 +1,10 @@
+# Scripts de shell precisam de LF mesmo em checkout Windows.
+# Com core.autocrlf=true o git entrega CRLF no Windows, e o fluxo do
+# infra/fase1-setup.sh é justamente copiar o arquivo do checkout para a
+# VPS via scp — o Linux rejeita o shebang com \r ("bad interpreter").
+*.sh text eol=lf
+
+# Mesmo motivo: entram em imagem Linux ou são lidos por ferramentas POSIX.
+Dockerfile text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
