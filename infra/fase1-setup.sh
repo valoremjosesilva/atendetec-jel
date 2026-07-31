@@ -57,10 +57,10 @@ info "Verificando recursos da máquina..."
 TOTAL_RAM_MB=$(free -m | awk '/^Mem:/{print $2}')
 DISK_GB=$(df -BG --output=size / | tail -1 | tr -dc '0-9')
 
-if (( TOTAL_RAM_MB < 14000 )); then
+if (( TOTAL_RAM_MB < 7500 )); then
   warn "RAM detectada: ${TOTAL_RAM_MB} MB."
-  warn "Os 4 SaaS + Coolify + Postgres/Redis/RabbitMQ pedem ~11 GB."
-  warn "O plano assume CPX41 (16 GB). Abaixo disso vai faltar."
+  warn "Os 3 serviços da Fase 1 + Coolify + Postgres/Redis/RabbitMQ pedem ~3,4 GB."
+  warn "O plano assume CX33 (8 GB). Abaixo disso vai faltar folga."
   read -rp "Continuar mesmo assim? [s/N] " CONFIRMA
   [[ "${CONFIRMA,,}" == "s" ]] || error "Abortado. Redimensione a VPS e rode de novo."
 else
@@ -187,18 +187,17 @@ cat <<EOF
   No Coolify: Settings > Instance Domain > https://painel.mjml.com.br
   Confirme o cadeado antes de fechar o túnel.
 
-  ── 3. Serviços compartilhados (Etapa 2 do plano) ──────────
+  ── 3. Serviços compartilhados (Etapa 3 do plano) ──────────
   Criar como recursos do Coolify, SEM porta pública:
-    PostgreSQL 16  → bancos: atendefy, horafy, delify, lojas
-    Redis 7        → índices: 0=atendefy 1=horafy 2=delify 3=lojas
-    RabbitMQ 3.13  → vhosts: /horafy, /delify
+    PostgreSQL 16  → bancos: atendefy, horafy, evolution
+    Redis 7        → índices: 0=atendefy 1=horafy
+    RabbitMQ 3.13  → vhost: /horafy
 
-  ── 4. Ordem de deploy dos SaaS ────────────────────────────
+  ── 4. Ordem de deploy — Fase 1 ────────────────────────────
     1º  site institucional em mjml.com.br  (valida SSL/proxy)
-    2º  Horafy    → agendafy.com.br, alugafy.com.br  (+ wildcards)
-    3º  Lojas     → loja.mjml.com.br
-    4º  Delify    → delivery.mjml.com.br
-    5º  Atendefy  → migração com janela e rollback (por último)
+    2º  AGENDA (Horafy)   → agenda.mjml.com.br + wildcard *.agenda
+    3º  ATENDE (Atendefy) → app./api./evolution.atende.mjml.com.br
+    Fase 2 (depois): Alugue, Delify (delivery.) e Lojas (loja.)
 
   ── 5. Conferir ────────────────────────────────────────────
     ufw status verbose

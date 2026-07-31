@@ -74,12 +74,20 @@ services:
       - DATABASE_ENABLED=true
       - DATABASE_PROVIDER=postgresql
       - DATABASE_CONNECTION_URI=${EVOLUTION_DATABASE_URI:?defina EVOLUTION_DATABASE_URI}
+      # O default de SAVE_DATA_INSTANCE na v2 é false: sem ele a sessão não vai
+      # para o banco e todo restart do container exige reler o QR code.
+      - DATABASE_SAVE_DATA_INSTANCE=true
+      - DATABASE_SAVE_DATA_NEW_MESSAGE=true
       - CACHE_REDIS_ENABLED=false
       - CACHE_LOCAL_ENABLED=true
       # Versao do WhatsApp Web que o Baileys anuncia. O default da imagem fica
       # desatualizado e o WhatsApp fecha o socket antes do QR. Atualizar quando o QR
       # voltar a falhar (https://raw.githubusercontent.com/WhiskeySockets/Baileys/master/src/Defaults/baileys-version.json).
       - CONFIG_SESSION_PHONE_VERSION=2.3000.1035194821
+    volumes:
+      # Redundância da sessão: mesmo com o banco salvando a instância, credenciais
+      # locais do Baileys ficam aqui e sobrevivem à recriação do container.
+      - evolution_instances:/evolution/instances
     networks:
       - atendefy
 
@@ -93,6 +101,7 @@ services:
 
 volumes:
   uptime_data:
+  evolution_instances:
 
 networks:
   atendefy:
