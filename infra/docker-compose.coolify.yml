@@ -52,6 +52,23 @@ services:
       - Email__FromName=${EMAIL_FROM_NAME:-Atende}
     networks:
       - atendefy
+      - coolify
+    # Roteamento declarado em labels, não na UI do Coolify — mesmo padrão do
+    # Horafy: uma única fonte de verdade, versionada. HTTP-01 comum: hosts
+    # explícitos (schema-per-tenant, sem wildcard — ver cabeçalho).
+    labels:
+      - traefik.enable=true
+      - 'traefik.http.routers.atendefy-api.rule=Host(`api.atende.mjml.com.br`)'
+      - traefik.http.routers.atendefy-api.entrypoints=https
+      - traefik.http.routers.atendefy-api.tls=true
+      - traefik.http.routers.atendefy-api.tls.certresolver=letsencrypt
+      - traefik.http.routers.atendefy-api.service=atendefy-api
+      - traefik.http.services.atendefy-api.loadbalancer.server.port=8080
+      - 'traefik.http.routers.atendefy-api-http.rule=Host(`api.atende.mjml.com.br`)'
+      - traefik.http.routers.atendefy-api-http.entrypoints=http
+      - traefik.http.routers.atendefy-api-http.middlewares=atendefy-https
+      - traefik.http.routers.atendefy-api-http.service=atendefy-api
+      - traefik.http.middlewares.atendefy-https.redirectscheme.scheme=https
 
   atendefy-web:
     image: ${WEB_IMAGE:?defina WEB_IMAGE}:${WEB_VERSION:-latest}
@@ -60,6 +77,19 @@ services:
       - atendefy-api
     networks:
       - atendefy
+      - coolify
+    labels:
+      - traefik.enable=true
+      - 'traefik.http.routers.atendefy-web.rule=Host(`app.atende.mjml.com.br`)'
+      - traefik.http.routers.atendefy-web.entrypoints=https
+      - traefik.http.routers.atendefy-web.tls=true
+      - traefik.http.routers.atendefy-web.tls.certresolver=letsencrypt
+      - traefik.http.routers.atendefy-web.service=atendefy-web
+      - traefik.http.services.atendefy-web.loadbalancer.server.port=80
+      - 'traefik.http.routers.atendefy-web-http.rule=Host(`app.atende.mjml.com.br`)'
+      - traefik.http.routers.atendefy-web-http.entrypoints=http
+      - traefik.http.routers.atendefy-web-http.middlewares=atendefy-https
+      - traefik.http.routers.atendefy-web-http.service=atendefy-web
 
   evolution-api:
     # Versao fixada: Baileys e frágil e um pull de :latest pode quebrar o QR code.
@@ -90,6 +120,19 @@ services:
       - evolution_instances:/evolution/instances
     networks:
       - atendefy
+      - coolify
+    labels:
+      - traefik.enable=true
+      - 'traefik.http.routers.atendefy-evo.rule=Host(`evolution.atende.mjml.com.br`)'
+      - traefik.http.routers.atendefy-evo.entrypoints=https
+      - traefik.http.routers.atendefy-evo.tls=true
+      - traefik.http.routers.atendefy-evo.tls.certresolver=letsencrypt
+      - traefik.http.routers.atendefy-evo.service=atendefy-evo
+      - traefik.http.services.atendefy-evo.loadbalancer.server.port=8080
+      - 'traefik.http.routers.atendefy-evo-http.rule=Host(`evolution.atende.mjml.com.br`)'
+      - traefik.http.routers.atendefy-evo-http.entrypoints=http
+      - traefik.http.routers.atendefy-evo-http.middlewares=atendefy-https
+      - traefik.http.routers.atendefy-evo-http.service=atendefy-evo
 
   uptime-kuma:
     image: louislam/uptime-kuma:1
@@ -98,6 +141,21 @@ services:
       - uptime_data:/app/data
     networks:
       - atendefy
+      - coolify
+    labels:
+      - traefik.enable=true
+      # status.mjml.com.br, não monitor.atende: o Kuma monitora a plataforma
+      # inteira (§8.2 do PLANO-DEPLOY-FASE1.md).
+      - 'traefik.http.routers.atendefy-kuma.rule=Host(`status.mjml.com.br`)'
+      - traefik.http.routers.atendefy-kuma.entrypoints=https
+      - traefik.http.routers.atendefy-kuma.tls=true
+      - traefik.http.routers.atendefy-kuma.tls.certresolver=letsencrypt
+      - traefik.http.routers.atendefy-kuma.service=atendefy-kuma
+      - traefik.http.services.atendefy-kuma.loadbalancer.server.port=3001
+      - 'traefik.http.routers.atendefy-kuma-http.rule=Host(`status.mjml.com.br`)'
+      - traefik.http.routers.atendefy-kuma-http.entrypoints=http
+      - traefik.http.routers.atendefy-kuma-http.middlewares=atendefy-https
+      - traefik.http.routers.atendefy-kuma-http.service=atendefy-kuma
 
 volumes:
   uptime_data:
@@ -106,3 +164,9 @@ volumes:
 networks:
   atendefy:
     driver: bridge
+  # Rede do Coolify: Traefik e os serviços compartilhados (Postgres/Redis)
+  # vivem nela. Declarada explicitamente — o toggle "Connect To Predefined
+  # Network" do Coolify v4.1.2 não anexa quando o compose já tem networks
+  # próprias (mesma lição do Horafy, 04/08/2026).
+  coolify:
+    external: true
