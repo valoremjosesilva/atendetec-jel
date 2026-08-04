@@ -103,7 +103,10 @@ if [[ -f /root/.ssh/authorized_keys && -s /root/.ssh/authorized_keys ]]; then
 PasswordAuthentication no
 PermitRootLogin prohibit-password
 EOF
-  systemctl reload ssh 2>/dev/null || systemctl reload sshd
+  # Em Ubuntu 24.04+ o sshd é ativado por socket (ssh.socket): não há
+  # ssh.service ativo para recarregar, e cada conexão nova já lê a config.
+  systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null \
+    || warn "sshd sem reload (socket-activated) — config vale para novas conexões."
   ok "Login por senha desabilitado (só chave SSH)."
 else
   warn "Nenhuma chave em /root/.ssh/authorized_keys — login por senha MANTIDO."
