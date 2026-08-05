@@ -8,6 +8,7 @@ using Atendefy.API.Modules.Auth;
 using Atendefy.API.Modules.Billing;
 using Atendefy.API.Modules.Billing.Gateways;
 using Atendefy.API.Modules.Chatbot;
+using Atendefy.API.Modules.Leads;
 using Atendefy.API.Modules.Scheduling;
 using Atendefy.API.Modules.Scheduling.Horafy;
 using Atendefy.API.Modules.Tenants;
@@ -66,6 +67,7 @@ builder.Services.AddSingleton(sp =>
 // Tenant
 builder.Services.AddSingleton(new TenantResolver(baseDomain));
 builder.Services.AddScoped<TenantService>();
+builder.Services.AddScoped<LeadService>();
 builder.Services.AddScoped<EntitlementsService>();
 builder.Services.AddScoped<AdminService>();
 
@@ -185,8 +187,8 @@ builder.Services.AddHostedService<SuspensionWorker>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// CORS
-var allowedOrigins = new List<string> { $"https://app.{baseDomain}" };
+// CORS — o apex (landing pública) também chama a API (formulário de interesse).
+var allowedOrigins = new List<string> { $"https://app.{baseDomain}", $"https://{baseDomain}" };
 if (builder.Environment.IsDevelopment())
     allowedOrigins.Add("http://localhost:5173");
 
@@ -238,6 +240,7 @@ app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = Dat
 
 app.MapAuthEndpoints();
 app.MapTenantEndpoints();
+app.MapLeadEndpoints();
 app.MapAdminEndpoints();
 app.MapWhatsAppEndpoints();
 app.MapAIEndpoints();

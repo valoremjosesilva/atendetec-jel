@@ -1,4 +1,5 @@
 using Atendefy.API.Modules.Billing.Models;
+using Atendefy.API.Modules.Leads.Models;
 using Atendefy.API.Modules.Tenants.Models;
 using Atendefy.API.Modules.Webhooks.Models;
 using Microsoft.EntityFrameworkCore;
@@ -13,6 +14,7 @@ public class PublicDbContext(DbContextOptions<PublicDbContext> options) : DbCont
     public DbSet<Plan> Plans => Set<Plan>();
     public DbSet<Subscription> Subscriptions => Set<Subscription>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
+    public DbSet<Lead> Leads => Set<Lead>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -72,6 +74,19 @@ public class PublicDbContext(DbContextOptions<PublicDbContext> options) : DbCont
             e.Property(x => x.ExternalId).HasMaxLength(200);
             e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Restrict);
             e.HasOne<Plan>().WithMany().HasForeignKey(x => x.PlanId).OnDelete(DeleteBehavior.Restrict);
+            e.HasQueryFilter(x => !x.IsDeleted);
+        });
+
+        modelBuilder.Entity<Lead>(e =>
+        {
+            e.ToTable("leads");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.Name).IsRequired().HasMaxLength(200);
+            e.Property(x => x.Phone).IsRequired().HasMaxLength(30);
+            e.Property(x => x.Email).HasMaxLength(256);
+            e.Property(x => x.BusinessType).HasMaxLength(100);
+            e.Property(x => x.Message).HasMaxLength(1000);
+            e.HasIndex(x => new { x.Phone, x.CreatedAt });
             e.HasQueryFilter(x => !x.IsDeleted);
         });
 
