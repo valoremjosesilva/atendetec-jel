@@ -98,7 +98,9 @@ services:
   evolution-api:
     # Versao fixada: Baileys e frágil e um pull de :latest pode quebrar o QR code.
     # v2.2.3 = digest da imagem que roda em produção. Não subir de versão sem testar QR.
-    image: atendai/evolution-api:v2.2.3
+    # A org no Docker Hub mudou de `atendai` para `evoapicloud` (fev/2025);
+    # `atendai/evolution-api` não existe mais e o pull falha com "denied".
+    image: evoapicloud/evolution-api:v2.2.3
     profiles: [production]
     restart: unless-stopped
     environment:

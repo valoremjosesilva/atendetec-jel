@@ -96,7 +96,9 @@ services:
     # v2.2.3 = digest da imagem que roda em produção. Não subir de versão sem testar QR.
     # A stack `infra/` da raiz do repositório JEL usa `:latest` — se as duas
     # rodarem no mesmo host, é por aí que o QR quebra.
-    image: atendai/evolution-api:v2.2.3
+    # A org no Docker Hub mudou de `atendai` para `evoapicloud` (fev/2025);
+    # `atendai/evolution-api` não existe mais e o pull falha com "denied".
+    image: evoapicloud/evolution-api:v2.2.3
     restart: unless-stopped
     environment:
       - SERVER_URL=https://evolution.${DOMAIN:-atende.mjml.com.br}
