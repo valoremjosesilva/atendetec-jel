@@ -90,6 +90,18 @@ services:
       - traefik.http.routers.atendefy-web-http.entrypoints=http
       - traefik.http.routers.atendefy-web-http.middlewares=atendefy-https
       - traefik.http.routers.atendefy-web-http.service=atendefy-web
+      # Apex (atende.mjml.com.br) = landing pública, mesmo container/bundle — a
+      # rota "/" do SPA decide pelo hostname. Router separado do painel para a
+      # emissão do certificado do apex não interferir no cert de app.*.
+      - 'traefik.http.routers.atendefy-landing.rule=Host(`atende.mjml.com.br`)'
+      - traefik.http.routers.atendefy-landing.entrypoints=https
+      - traefik.http.routers.atendefy-landing.tls=true
+      - traefik.http.routers.atendefy-landing.tls.certresolver=letsencrypt
+      - traefik.http.routers.atendefy-landing.service=atendefy-web
+      - 'traefik.http.routers.atendefy-landing-http.rule=Host(`atende.mjml.com.br`)'
+      - traefik.http.routers.atendefy-landing-http.entrypoints=http
+      - traefik.http.routers.atendefy-landing-http.middlewares=atendefy-https
+      - traefik.http.routers.atendefy-landing-http.service=atendefy-web
 
   evolution-api:
     # Versao fixada: Baileys e frágil e um pull de :latest pode quebrar o QR code.

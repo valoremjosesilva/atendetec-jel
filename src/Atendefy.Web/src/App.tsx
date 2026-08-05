@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
 import AppLayout from '@/components/layout/AppLayout';
 import PrivateRoute from '@/components/PrivateRoute';
+import LandingPage from '@/pages/LandingPage';
 import LoginPage from '@/pages/LoginPage';
 import RegisterPage from '@/pages/RegisterPage';
 import VerifyEmailPage from '@/pages/VerifyEmailPage';
@@ -71,9 +72,18 @@ const router = createBrowserRouter([
       },
     ],
   },
-  { path: '/', element: <Navigate to="/dashboard" replace /> },
+  // Landing pública no apex (atende.mjml.com.br); o painel vive em app.* — o
+  // mesmo bundle serve os dois hosts, então a raiz decide pelo hostname.
+  // Em dev (localhost) a raiz segue para o painel; use /landing para ver a landing.
+  { path: '/', element: isApexHost() ? <LandingPage /> : <Navigate to="/dashboard" replace /> },
+  { path: '/landing', element: <LandingPage /> },
   { path: '*', element: <Navigate to="/login" replace /> },
 ]);
+
+function isApexHost(): boolean {
+  const host = window.location.hostname;
+  return !host.startsWith('app.') && host !== 'localhost' && host !== '127.0.0.1';
+}
 
 export default function App() {
   return <RouterProvider router={router} />;
